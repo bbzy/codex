@@ -1,6 +1,14 @@
 use super::*;
 
 impl ChatWidget {
+    pub(crate) fn finish_wake_timer_read(
+        &mut self,
+        revision: uuid::Uuid,
+        result: Result<Option<codex_protocol::protocol::ThreadTimer>, String>,
+    ) {
+        self.bottom_pane.finish_wake_timer_read(revision, result);
+    }
+
     pub(crate) fn handle_server_notification(
         &mut self,
         notification: ServerNotification,
@@ -44,7 +52,6 @@ impl ChatWidget {
             self.restore_retry_status_header_if_present();
         }
         match notification {
-            ServerNotification::ThreadTimerUpdated(_) => {}
             ServerNotification::McpServerOauthLoginCompleted(notification) => {
                 if notification.success {
                     self.add_info_message(
@@ -77,6 +84,9 @@ impl ChatWidget {
                         );
                     }
                 }
+            }
+            ServerNotification::ThreadTimerUpdated(notification) => {
+                self.bottom_pane.set_wake_timer(notification.timer);
             }
             ServerNotification::ThreadGoalUpdated(notification) => {
                 self.on_thread_goal_updated(notification.goal, notification.turn_id);

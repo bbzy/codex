@@ -93,6 +93,13 @@ impl ChatWidget {
         let connector_scope_changed = previous_thread_id != Some(session.thread_id)
             || self.config.cwd.as_path() != session.cwd.as_path();
         self.thread_id = Some(session.thread_id);
+        let revision = self.bottom_pane.begin_wake_timer_read();
+        if self.config.features.enabled(Feature::TimerTool) {
+            self.app_event_tx.send(AppEvent::ReadWakeTimer {
+                thread_id: session.thread_id,
+                revision,
+            });
+        }
         self.daybreak_enabled = self.config.features.enabled(Feature::CliDaybreak)
             && session.daybreak_enabled
             && !matches!(display, SessionConfiguredDisplay::SideConversation);

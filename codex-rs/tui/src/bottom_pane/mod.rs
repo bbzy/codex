@@ -43,8 +43,10 @@ use crate::key_hint::KeyBindingListExt;
 use crate::keymap::KeymapContext;
 use crate::keymap::KeymapContextSet;
 use crate::keymap::RuntimeKeymap;
+use crate::render::Insets;
 use crate::render::renderable::FlexRenderable;
 use crate::render::renderable::Renderable;
+use crate::render::renderable::RenderableExt;
 use crate::render::renderable::RenderableItem;
 use crate::terminal_palette::effective_stdout_color_level;
 use crate::terminal_program_status::ProgramStatusKind;
@@ -319,6 +321,8 @@ pub(crate) struct BottomPane {
     enhanced_keys_supported: bool,
     disable_paste_burst: bool,
     is_task_running: bool,
+    wake_timer_message: Option<String>,
+    wake_timer_revision: uuid::Uuid,
     esc_backtrack_hint: bool,
     animations_enabled: bool,
     effects: codex_config::types::TuiEffects,
@@ -418,6 +422,8 @@ impl BottomPane {
             enhanced_keys_supported,
             disable_paste_burst,
             is_task_running: false,
+            wake_timer_message: None,
+            wake_timer_revision: uuid::Uuid::new_v4(),
             status: None,
             hook_status_message: None,
             inline_banner: None,
@@ -1398,6 +1404,54 @@ impl BottomPane {
     }
 
     // esc_backtrack_hint_visible removed; hints are controlled internally.
+
+    pub(crate) fn begin_wake_timer_read(&mut self) -> uuid::Uuid {
+        self.wake_timer_message = None;
+        self.wake_timer_revision = uuid::Uuid::new_v4();
+        self.request_redraw();
+        self.wake_timer_revision
+    }
+
+    pub(crate) fn finish_wake_timer_read(
+        &mut self,
+        revision: uuid::Uuid,
+        timer: Result<Option<codex_protocol::protocol::ThreadTimer>, String>,
+    ) {
+        if revision != self.wake_timer_revision {
+            return;
+        }
+        match timer {
+            Ok(timer) => self.set_wake_timer(timer),
+            Err(_) => {
+                self.wake_timer_message =
+                    Some("Timer status unavailable; reconnect to refresh".to_string());
+                self.request_redraw();
+            }
+        }
+    }
+
+    pub(crate) fn set_wake_timer(&mut self, timer: Option<codex_protocol::protocol::ThreadTimer>) {
+        self.wake_timer_revision = uuid::Uuid::new_v4();
+        self.wake_timer_message = timer.map(|timer| {
+            let kind = if timer.kind == "once" {
+                "Once".to_string()
+            } else {
+                format!(
+                    "Every {}",
+                    crate::status_indicator_widget::fmt_elapsed_compact(timer.seconds)
+                )
+            };
+            let next = chrono::DateTime::parse_from_rfc3339(&timer.next_at)
+                .map(|time| {
+                    time.with_timezone(&chrono::Local)
+                        .format("%Y/%m/%d %H:%M:%S")
+                        .to_string()
+                })
+                .unwrap_or(timer.next_at);
+            format!("Timer · {kind} · Next {next}")
+        });
+        self.request_redraw();
+    }
 
     pub fn set_task_running(&mut self, running: bool) {
         let was_running = self.is_task_running;
@@ -2454,6 +2508,15 @@ impl BottomPane {
             {
                 flex.push(/*flex*/ 0, RenderableItem::Borrowed(banner));
             }
+            if let Some(message) = &self.wake_timer_message {
+                flex.push(
+                    0,
+                    Paragraph::new(message.as_str())
+                        .dim()
+                        .wrap(ratatui::widgets::Wrap { trim: false })
+                        .inset(Insets::tlbr(0, 2, 0, 1)),
+                );
+            }
             if let Some(status) = self.status_widget() {
                 flex.push(
                     /*flex*/ 0,
@@ -2742,6 +2805,60 @@ mod tests {
             effects: Default::default(),
             skills: Some(Vec::new()),
         })
+    }
+
+    #[test]
+    fn wake_timer_survives_completed_work_and_rejects_stale_reads() {
+        let (tx, _) = unbounded_channel();
+        let mut pane = test_pane(AppEventSender::new(tx));
+        let timer = codex_protocol::protocol::ThreadTimer {
+            kind: "interval".into(),
+            seconds: 300,
+            next_at: "2026-11-09T07:30:00Z".into(),
+        };
+        let revision = pane.begin_wake_timer_read();
+        pane.set_wake_timer(Some(timer));
+        pane.finish_wake_timer_read(revision, Ok(None));
+        assert!(
+            pane.wake_timer_message
+                .as_ref()
+                .unwrap()
+                .contains("Every 5m 00s")
+        );
+        assert!(!pane.is_task_running());
+        pane.set_task_running(true);
+        pane.set_task_running(false);
+        let output = render_snapshot(&pane, Rect::new(0, 0, 80, pane.desired_height(80)));
+        assert!(
+            output
+                .lines()
+                .next()
+                .unwrap()
+                .starts_with("  Timer · Every")
+        );
+        assert!(!output.contains("Working"));
+        let narrow = render_snapshot(&pane, Rect::new(0, 0, 25, pane.desired_height(25)));
+        assert!(narrow.lines().next().unwrap().starts_with("  Timer"));
+        for line in narrow.lines().take(2) {
+            assert!(line.starts_with("  "));
+            assert!(line.ends_with(' '));
+        }
+
+        pane.set_wake_timer(None);
+        assert!(pane.wake_timer_message.is_none());
+        let old = pane.begin_wake_timer_read();
+        let current = pane.begin_wake_timer_read();
+        pane.finish_wake_timer_read(old, Err("old thread".into()));
+        assert!(pane.wake_timer_message.is_none());
+        pane.finish_wake_timer_read(current, Err("disconnected".into()));
+        assert!(
+            pane.wake_timer_message
+                .as_ref()
+                .unwrap()
+                .contains("unavailable")
+        );
+        pane.set_wake_timer(None);
+        assert!(pane.wake_timer_message.is_none());
     }
 
     fn exec_request() -> ApprovalRequest {
