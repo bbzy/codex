@@ -1928,7 +1928,7 @@ impl Session {
                     thread_id,
                     Arc::clone(&services.agent_control),
                 ),
-                timer: crate::session::timer::SessionTimer::default(),
+                timer: crate::session::timer::SessionTimer::new(thread_id, tx_event.clone()),
                 services,
                 git_enrichment_policy,
                 fork_persistence,

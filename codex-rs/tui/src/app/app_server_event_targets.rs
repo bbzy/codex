@@ -68,6 +68,9 @@ pub(super) fn server_notification_thread_target(
         ServerNotification::ThreadTokenUsageUpdated(notification) => {
             Some(notification.thread_id.as_str())
         }
+        ServerNotification::ThreadTimerUpdated(notification) => {
+            Some(notification.thread_id.as_str())
+        }
         ServerNotification::ThreadGoalUpdated(notification) => {
             Some(notification.thread_id.as_str())
         }
@@ -258,6 +261,21 @@ mod tests {
     use codex_protocol::config_types::Settings;
     use codex_protocol::openai_models::ReasoningEffort;
     use pretty_assertions::assert_eq;
+
+    #[test]
+    fn wake_timer_updates_target_their_own_thread() {
+        let thread_id = ThreadId::new();
+        let notification = ServerNotification::ThreadTimerUpdated(
+            codex_app_server_protocol::ThreadTimerUpdatedNotification {
+                thread_id: thread_id.to_string(),
+                timer: None,
+            },
+        );
+        assert_eq!(
+            server_notification_thread_target(&notification),
+            ServerNotificationThreadTarget::Thread(thread_id)
+        );
+    }
 
     fn test_thread_settings() -> ThreadSettings {
         ThreadSettings {

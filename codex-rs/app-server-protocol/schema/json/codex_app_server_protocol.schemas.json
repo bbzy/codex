@@ -427,6 +427,30 @@
             },
             "method": {
               "enum": [
+                "thread/timer/get"
+              ],
+              "title": "Thread/timer/getRequestMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/v2/ThreadTimerGetParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "title": "Thread/timer/getRequest",
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/v2/RequestId"
+            },
+            "method": {
+              "enum": [
                 "thread/goal/get"
               ],
               "title": "Thread/goal/getRequestMethod",
@@ -4920,6 +4944,26 @@
             "params"
           ],
           "title": "Thread/attachment/updatedNotification",
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "enum": [
+                "thread/timer/updated"
+              ],
+              "title": "Thread/timer/updatedNotificationMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/v2/ThreadTimerUpdatedNotification"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "title": "Thread/timer/updatedNotification",
           "type": "object"
         },
         {
@@ -26156,6 +26200,81 @@
             "type": "object"
           }
         ]
+      },
+      "ThreadTimer": {
+        "description": "Runtime-only wake schedule; timestamps are RFC 3339 UTC.",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "nextAt": {
+            "type": "string"
+          },
+          "seconds": {
+            "format": "uint64",
+            "minimum": 0.0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "nextAt",
+          "seconds"
+        ],
+        "type": "object"
+      },
+      "ThreadTimerGetParams": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "threadId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "threadId"
+        ],
+        "title": "ThreadTimerGetParams",
+        "type": "object"
+      },
+      "ThreadTimerGetResponse": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "timer": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/v2/ThreadTimer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "ThreadTimerGetResponse",
+        "type": "object"
+      },
+      "ThreadTimerUpdatedNotification": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "threadId": {
+            "type": "string"
+          },
+          "timer": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/v2/ThreadTimer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "threadId"
+        ],
+        "title": "ThreadTimerUpdatedNotification",
+        "type": "object"
       },
       "ThreadTokenUsage": {
         "properties": {

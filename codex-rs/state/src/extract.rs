@@ -57,6 +57,7 @@ pub fn rollout_item_affects_thread_metadata(item: &RolloutItem) -> bool {
         RolloutItem::EventMsg(
             EventMsg::TokenCount(_)
             | EventMsg::UserMessage(_)
+            | EventMsg::ThreadTimerUpdated(_)
             | EventMsg::ThreadGoalUpdated(_)
             | EventMsg::ThreadSettingsApplied(_),
         ) => true,

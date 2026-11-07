@@ -534,6 +534,19 @@ enum RunningThreadResumeResult {
 }
 
 impl ThreadRequestProcessor {
+    pub(crate) async fn thread_timer_get(
+        &self,
+        params: codex_app_server_protocol::ThreadTimerGetParams,
+    ) -> Result<codex_app_server_protocol::ThreadTimerGetResponse, JSONRPCErrorError> {
+        let thread_id = ThreadId::from_string(&params.thread_id)
+            .map_err(|error| invalid_request(error.to_string()))?;
+        let timer = match self.thread_manager.get_thread(thread_id).await {
+            Ok(thread) => thread.timer_info(),
+            Err(_) => None,
+        };
+        Ok(codex_app_server_protocol::ThreadTimerGetResponse { timer })
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         auth_manager: Arc<AuthManager>,

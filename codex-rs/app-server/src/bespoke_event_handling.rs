@@ -1284,6 +1284,16 @@ pub(crate) async fn apply_bespoke_event_handling(
             )
             .await;
         }
+        EventMsg::ThreadTimerUpdated(event) => {
+            outgoing
+                .send_server_notification(ServerNotification::ThreadTimerUpdated(
+                    codex_app_server_protocol::ThreadTimerUpdatedNotification {
+                        thread_id: event.thread_id.to_string(),
+                        timer: event.timer,
+                    },
+                ))
+                .await;
+        }
         EventMsg::ThreadGoalUpdated(thread_goal_event) => {
             let notification = ThreadGoalUpdatedNotification {
                 thread_id: thread_goal_event.thread_id.to_string(),

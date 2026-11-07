@@ -915,6 +915,11 @@ impl CodexThread {
             .await;
     }
 
+    /// Current runtime-only wake schedule, without starting a turn.
+    pub fn timer_info(&self) -> Option<codex_protocol::protocol::ThreadTimer> {
+        self.session.timer.get().map(|timer| timer.display_info())
+    }
+
     /// Records an explicit user goal mutation without scheduling a model response.
     pub async fn record_user_goal_update(
         &self,

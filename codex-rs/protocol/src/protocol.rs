@@ -1608,6 +1608,9 @@ pub enum EventMsg {
     /// Updated long-running goal metadata for the thread.
     ThreadGoalUpdated(ThreadGoalUpdatedEvent),
 
+    /// Current process-owned wake timer changed.
+    ThreadTimerUpdated(ThreadTimerUpdatedEvent),
+
     /// A durable thread-scoped user-message queue changed.
     ThreadQueueChanged(ThreadQueueChangedEvent),
 
@@ -6766,4 +6769,23 @@ mod tests {
 
         assert_eq!(info.model_context_window, Some(258_400));
     }
+}
+
+/// Runtime-only wake schedule; timestamps are RFC 3339 UTC.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "protocol/")]
+pub struct ThreadTimer {
+    pub kind: String,
+    #[ts(type = "number")]
+    pub seconds: u64,
+    pub next_at: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "protocol/")]
+pub struct ThreadTimerUpdatedEvent {
+    pub thread_id: ThreadId,
+    pub timer: Option<ThreadTimer>,
 }

@@ -59,6 +59,18 @@ pub(crate) struct TimerInfo {
 }
 
 impl TimerInfo {
+    pub(crate) fn display_info(&self) -> codex_protocol::protocol::ThreadTimer {
+        codex_protocol::protocol::ThreadTimer {
+            kind: match self.kind {
+                TimerKind::Once => "once",
+                TimerKind::Interval => "interval",
+            }
+            .to_string(),
+            seconds: self.seconds,
+            next_at: self.next_at.to_rfc3339(),
+        }
+    }
+
     /// The hidden context body delivered to the model when the timer fires.
     pub(crate) fn wake_body(&self) -> String {
         format!(
@@ -68,7 +80,13 @@ impl TimerInfo {
     }
 }
 
+type TimerNotifier = (
+    ThreadId,
+    async_channel::Sender<codex_protocol::protocol::Event>,
+);
+
 struct ActiveTimer {
+    notifier: Option<TimerNotifier>,
     info: TimerInfo,
     generation: u64,
     cancel: CancellationToken,
@@ -81,10 +99,35 @@ struct ActiveTimer {
 #[derive(Clone, Default)]
 pub(crate) struct SessionTimer {
     active: Arc<Mutex<Option<ActiveTimer>>>,
+    notifier: Option<TimerNotifier>,
     next_generation: Arc<AtomicU64>,
 }
 
 impl SessionTimer {
+    pub(crate) fn new(
+        thread_id: ThreadId,
+        sender: async_channel::Sender<codex_protocol::protocol::Event>,
+    ) -> Self {
+        Self {
+            notifier: Some((thread_id, sender)),
+            ..Self::default()
+        }
+    }
+
+    fn notify(notifier: &Option<TimerNotifier>, info: Option<&TimerInfo>) {
+        if let Some((thread_id, sender)) = notifier {
+            let _ = sender.try_send(codex_protocol::protocol::Event {
+                id: String::new(),
+                msg: codex_protocol::protocol::EventMsg::ThreadTimerUpdated(
+                    codex_protocol::protocol::ThreadTimerUpdatedEvent {
+                        thread_id: *thread_id,
+                        timer: info.map(TimerInfo::display_info),
+                    },
+                ),
+            });
+        }
+    }
+
     /// Returns the current timer, or `None` when no timer is set.
     pub(crate) fn get(&self) -> Option<TimerInfo> {
         Self::lock(&self.active)
@@ -96,6 +139,9 @@ impl SessionTimer {
     pub(crate) fn cancel(&self) -> Option<TimerInfo> {
         let mut guard = Self::lock(&self.active);
         let active = guard.take();
+        if active.is_some() {
+            Self::notify(&self.notifier, None);
+        }
         if let Some(active) = &active {
             active.cancel.cancel();
         }
@@ -129,10 +175,12 @@ impl SessionTimer {
     fn install(&self, info: TimerInfo, generation: u64, cancel: CancellationToken) {
         let mut active = Self::lock(&self.active);
         let previous = active.replace(ActiveTimer {
+            notifier: self.notifier.clone(),
             info,
             generation,
             cancel,
         });
+        Self::notify(&self.notifier, active.as_ref().map(|timer| &timer.info));
         if let Some(previous) = previous {
             previous.cancel.cancel();
         }
@@ -148,6 +196,10 @@ impl SessionTimer {
             .as_ref()
             .is_some_and(|timer| timer.generation == generation)
         {
+            Self::notify(
+                &active.as_ref().and_then(|timer| timer.notifier.clone()),
+                None,
+            );
             *active = None;
         }
     }
@@ -166,6 +218,7 @@ impl SessionTimer {
         let timer = active
             .as_ref()
             .filter(|timer| timer.generation == generation)?;
+        let notifier = timer.notifier.clone();
         let mut current = timer.info.clone();
         if current.kind == TimerKind::Once {
             *active = None;
@@ -173,6 +226,7 @@ impl SessionTimer {
             current.next_at = advance_interval(&current, now);
             timer.info.next_at = current.next_at;
         }
+        Self::notify(&notifier, active.as_ref().map(|timer| &timer.info));
         Some(current)
     }
 }
