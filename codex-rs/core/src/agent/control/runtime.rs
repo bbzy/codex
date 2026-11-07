@@ -276,6 +276,12 @@ impl AgentControlInit {
 }
 
 impl LocalAgentRuntime {
+    /// Resolves the thread registry for background wakeups, such as session
+    /// timers, that are not agent operations.
+    pub(crate) fn upgrade_manager(&self) -> Option<Arc<ThreadManagerState>> {
+        self.manager.upgrade()
+    }
+
     pub(crate) fn admit_start(&self) -> CodexResult<AgentTreeMembership> {
         if self.shutdown_state.members.is_closed() {
             return Err(
