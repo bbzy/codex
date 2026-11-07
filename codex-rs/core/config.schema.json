@@ -1389,6 +1389,9 @@
             "terminal_visualization_instructions": {
               "type": "boolean"
             },
+            "timer_tool": {
+              "type": "boolean"
+            },
             "token_budget": {
               "$ref": "#/definitions/FeatureToml_for_TokenBudgetConfigToml"
             },
@@ -8104,6 +8107,9 @@
           "type": "boolean"
         },
         "terminal_visualization_instructions": {
+          "type": "boolean"
+        },
+        "timer_tool": {
           "type": "boolean"
         },
         "token_budget": {

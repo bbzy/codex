@@ -15,10 +15,11 @@ Settings:
   stream: true
   text: {"verbosity":"low"}
   tool_choice: "auto"
-  tools (4; hash=c0d891b72dfe19c6):
-    - custom/exec: Run JavaScript code to orchestrate/compose tool calls - Evaluates the provided JavaScript code in...; hash=5f9adb37c23e2085
+  tools (5; hash=b640f0ba9eb32380):
+    - custom/exec: Run JavaScript code to orchestrate/compose tool calls - Evaluates the provided JavaScript code in...; hash=7580fcb8950b6a2e
     - function/wait: Waits on a yielded `exec` cell and returns new output or completion. - Use `wait` only after `exe...; args=[cell_id, max_tokens, terminate, yield_time_ms]; hash=6692d8f6c55be489
     - function/request_user_input: Request user input for one to three short questions and wait for the response. This tool is only ...; args=[questions]; hash=64a729b25c424fc6
+    - function/timer: Set, cancel, or inspect this session's wake timer. Set requires type (once or interval) and posit...; args=[action, prompt, seconds, type]; hash=d7fa46664f299b4a
     - web_search; hash=e214d4db1bc49e89
 -- request 1 (request) --
 00:message/developer:
@@ -32,8 +33,8 @@ Settings:
 
 ## Window 2 (after request 1)
 Settings: relative to window 1
-  tools (4; hash=f74ded0dd31e19a8):
-    ~ custom/exec: Run JavaScript code to orchestrate/compose tool calls - Evaluates the provided JavaScript code in...; hash=f36b0269278fcd9d
+  tools (5; hash=7ca2b1d9072d6d68):
+    ~ custom/exec: Run JavaScript code to orchestrate/compose tool calls - Evaluates the provided JavaScript code in...; hash=b22775ee96c46bc4
 -- request 2 (request) --
 00:message/developer:
     <MODEL_INSTRUCTIONS>

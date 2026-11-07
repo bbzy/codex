@@ -6,12 +6,13 @@ Scenario: Permission discovery preserves legacy output, exposes reply-only acces
 
 ## Window 1
 -- request 1 (request) --
-00:additional_tools/developer (3; hash=e49a28343a9fe4ed):
-        - namespace/functions; hash=c8b8fa91706a7620
+00:additional_tools/developer (3; hash=e53d6f52674aac53):
+        - namespace/functions; hash=9a9d4201c7aa504c
           - function/exec_command
           - function/write_stdin
           - function/request_user_input
           - function/request_user_input_async
+          - function/timer
           - custom/apply_patch
           - function/view_image
         - namespace/clock: Tools for reading and waiting on time.; hash=a80435c7a3a3943f

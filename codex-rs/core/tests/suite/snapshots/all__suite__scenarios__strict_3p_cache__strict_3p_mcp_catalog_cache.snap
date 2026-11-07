@@ -22,6 +22,7 @@ Settings:
           - function/wait
           - function/request_user_input
           - function/request_user_input_async
+          - function/timer
         - namespace/clock: Tools for reading and waiting on time.; hash=f402e8c5e9b5e317
           - function/sleep
         - namespace/collaboration: Tools for spawning and managing sub-agents.; hash=2c8d6295978dbe63

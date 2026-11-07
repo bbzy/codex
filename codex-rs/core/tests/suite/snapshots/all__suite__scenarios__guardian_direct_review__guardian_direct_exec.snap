@@ -1,14 +1,13 @@
 ---
 source: core/tests/suite/scenarios_guardian_direct_review.rs
-assertion_line: 173
 expression: snapshot
 ---
 Scenario: Direct Guardian review of an injected exec call; an allow assessment does not execute it.
 
 ## Window 1
 -- request 1 (turn) --
-00:additional_tools/developer (1; hash=65a86311792f6c71):
-        - namespace/functions; hash=dcfbcf0da1c2d607
+00:additional_tools/developer (1; hash=2fc39b64c6d221d4):
+        - namespace/functions; hash=6829bb19ddd8b590
           - custom/exec
           - function/wait
 01:message/developer:

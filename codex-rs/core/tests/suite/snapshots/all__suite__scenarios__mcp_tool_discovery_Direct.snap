@@ -15,13 +15,14 @@ Settings:
   stream: true
   text: {"verbosity":"low"}
   tool_choice: "auto"
-  tools (11; hash=d2c3940ebd5ac02b):
-    - function/exec_command: Runs a command in a PTY, returning output or a session ID for ongoing interaction.; args=[cmd, justification, login, max_output_tokens, prefix_rule, sandbox_permissions, shell, tty, workdir, yield_time_ms]; hash=c04108e51a8548c5
+  tools (12; hash=c0ff39d0240020b7):
+    - function/exec_command: Runs a command in a PTY, returning output or a session ID for ongoing interaction. Background com...; args=[cmd, justification, login, max_output_tokens, prefix_rule, sandbox_permissions, shell, tty, workdir, yield_time_ms]; hash=7a0ee4dafbfe08d8
     - function/write_stdin: Writes characters to an existing unified exec session and returns recent output.; args=[chars, max_output_tokens, session_id, yield_time_ms]; hash=7fb62d8a3e2df4e2
     - function/list_mcp_resources: Lists resources provided by MCP servers. Resources allow servers to share data that provides cont...; args=[cursor, server]; hash=6792edaff13561bd
     - function/list_mcp_resource_templates: Lists resource templates provided by MCP servers. Parameterized resource templates allow servers ...; args=[cursor, server]; hash=60f17c90ef7a4ebb
     - function/read_mcp_resource: Read a specific resource from an MCP server given the server name and resource URI.; args=[server, uri]; hash=24246896b39008ae
     - function/request_user_input: Request user input for one to three short questions and wait for the response. This tool is only ...; args=[questions]; hash=64a729b25c424fc6
+    - function/timer: Set, cancel, or inspect this session's wake timer. Set requires type (once or interval) and posit...; args=[action, prompt, seconds, type]; hash=d7fa46664f299b4a
     - custom/apply_patch: The `apply_patch` tool can be used to edit files. This is a FREEFORM tool, so do not wrap the pat...; hash=dea9f12b0111a4ba
     - function/view_image: View a local image file from the filesystem when visual inspection is needed. Use this for images...; args=[detail, path]; hash=3b766d5bdec5d50e
     - namespace/multi_agent_v1: Tools for spawning and managing sub-agents.; hash=2327142bda177c50
@@ -45,7 +46,7 @@ Settings:
 
 ## Window 2 (after request 1)
 Settings: relative to window 1
-  tools (11; hash=21579d54e22ad527):
+  tools (12; hash=2bc7283905b8f2eb):
     ~ namespace/mcp__discovery: Use these tools to exercise the rmcp test server.; hash=66db79539eaf6be3
       - function/echo
       - function/search_tools

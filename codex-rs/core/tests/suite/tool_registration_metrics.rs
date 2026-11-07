@@ -73,6 +73,7 @@ async fn sampling_records_tool_registrations_once_across_stream_retry() -> Resul
             for feature in [
                 Feature::Collab,
                 Feature::SleepTool,
+                Feature::TimerTool,
                 Feature::TokenBudget,
                 Feature::SendMessageToUserAsync,
             ] {

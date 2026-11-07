@@ -212,6 +212,8 @@ mod safety_buffering;
 mod safety_check_downgrade;
 mod scenarios;
 mod search_tool;
+#[path = "session_timer.rs"]
+mod session_timer;
 mod settings_commits;
 mod settings_constraints;
 mod shell_snapshot;

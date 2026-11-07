@@ -114,6 +114,8 @@ pub enum Feature {
     ViewImage,
     /// Allow registration of the built-in sleep tool.
     SleepTool,
+    /// Allow registration of the built-in session wake timer tool.
+    TimerTool,
     /// Enable Claude-style lifecycle hooks loaded from hooks.json files.
     CodexHooks,
     /// Store CLI auth in the encrypted local secrets backend when keyring storage is selected.
@@ -1158,6 +1160,12 @@ pub const FEATURES: &[FeatureSpec] = &[
     FeatureSpec {
         id: Feature::SleepTool,
         key: "sleep_tool",
+        stage: Stage::Stable,
+        default_enabled: true,
+    },
+    FeatureSpec {
+        id: Feature::TimerTool,
+        key: "timer_tool",
         stage: Stage::Stable,
         default_enabled: true,
     },
