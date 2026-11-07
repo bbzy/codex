@@ -290,6 +290,7 @@ pub(crate) mod step_context;
 pub(crate) mod step_settings;
 mod thread_settings;
 pub(crate) mod time_reminder;
+pub(crate) mod timer;
 mod token_budget;
 pub(crate) mod turn;
 pub(crate) mod turn_context;

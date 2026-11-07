@@ -327,6 +327,7 @@ pub(super) async fn shutdown_session_runtime(sess: &Arc<Session>) {
     }
     let _ = sess.conversation.shutdown().await;
     sess.abort_all_tasks(TurnAbortReason::Interrupted).await;
+    sess.timer.cancel();
     if let Some(reporting) = &sess.outcome_reporting {
         reporting.handoffs.wait().await;
     }
