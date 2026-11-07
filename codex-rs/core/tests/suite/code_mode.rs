@@ -941,6 +941,7 @@ async fn code_mode_only_restricts_prompt_tools() -> Result<()> {
             "exec".to_string(),
             "wait".to_string(),
             "request_user_input".to_string(),
+            "timer".to_string(),
             "web_search".to_string()
         ]
     );
@@ -3816,6 +3817,7 @@ if (!tool) {
             "exec".to_string(),
             "wait".to_string(),
             "request_user_input".to_string(),
+            "timer".to_string(),
             "web_search".to_string()
         ]
     );

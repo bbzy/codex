@@ -16,11 +16,12 @@ Settings:
   text: {"verbosity":"low"}
   tool_choice: "auto"
 -- request 1 (turn) --
-00:additional_tools/developer (1; hash=638dc23247f41f35):
-        - namespace/functions; hash=f730aa90585570c5
+00:additional_tools/developer (1; hash=38f2d78a938b7458):
+        - namespace/functions; hash=3f1b6a68e2b3f184
           - custom/exec
           - function/wait
           - function/request_user_input
+          - function/timer
 01:message/developer:
     <MODEL_INSTRUCTIONS>
 02:message/developer:
@@ -40,11 +41,12 @@ Settings:
 ## Window 2 (after request 2: input diverged at item 05)
 Settings: same as window 1
 -- request 3 (turn) --
-00:additional_tools/developer (1; hash=638dc23247f41f35):
-        - namespace/functions; hash=f730aa90585570c5
+00:additional_tools/developer (1; hash=38f2d78a938b7458):
+        - namespace/functions; hash=3f1b6a68e2b3f184
           - custom/exec
           - function/wait
           - function/request_user_input
+          - function/timer
 01:message/developer:
     <MODEL_INSTRUCTIONS>
 02:message/developer:

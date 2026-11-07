@@ -16,11 +16,12 @@ Settings:
   text: {"verbosity":"low"}
   tool_choice: "auto"
 -- request 1 (turn) --
-00:additional_tools/developer (2; hash=ba36cb129fbde5df):
-        - namespace/functions; hash=106dd1b983efd2f7
+00:additional_tools/developer (2; hash=61b4bdaa9343a8ef):
+        - namespace/functions; hash=5900ae3af8a19e79
           - function/exec_command
           - function/write_stdin
           - function/request_user_input
+          - function/timer
           - custom/apply_patch
           - function/view_image
         - tool_search: # Tool discovery  Searches over deferred tool metadata with BM25 and exposes matching tools for t...; args=[limit, query]; hash=b573ed69c0b0e6c7
@@ -93,11 +94,12 @@ Settings:
 ## Window 2 (after request 3: input repeated)
 Settings: same as window 1
 -- request 4 (turn) --
-00:additional_tools/developer (2; hash=ba36cb129fbde5df):
-        - namespace/functions; hash=106dd1b983efd2f7
+00:additional_tools/developer (2; hash=61b4bdaa9343a8ef):
+        - namespace/functions; hash=5900ae3af8a19e79
           - function/exec_command
           - function/write_stdin
           - function/request_user_input
+          - function/timer
           - custom/apply_patch
           - function/view_image
         - tool_search: # Tool discovery  Searches over deferred tool metadata with BM25 and exposes matching tools for t...; args=[limit, query]; hash=b573ed69c0b0e6c7

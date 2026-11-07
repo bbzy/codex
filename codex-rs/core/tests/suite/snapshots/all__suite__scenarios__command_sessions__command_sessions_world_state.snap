@@ -6,15 +6,16 @@ Scenario: A Code Mode script drops its command handle. WorldState retains it whi
 
 ## Window 1
 -- request 1 (turn) --
-00:additional_tools/developer (3; hash=a89029a036f4c860):
-        - namespace/functions; hash=03340277aa23936f
+00:additional_tools/developer (3; hash=f5aa3d3c8456815e):
+        - namespace/functions; hash=04fb2f837d017e37
           - custom/exec
           - function/wait
           - function/request_user_input
           - function/request_user_input_async
+          - function/timer
         - namespace/clock: Tools for reading and waiting on time.; hash=f402e8c5e9b5e317
           - function/sleep
-        - namespace/collaboration: Tools for spawning and managing sub-agents.; hash=97cc486e5cf7761a
+        - namespace/collaboration: Tools for spawning and managing sub-agents.; hash=ae875a9d734f2fc2
           - function/followup_task
           - function/interrupt_agent
           - function/list_agents
@@ -58,15 +59,16 @@ Scenario: A Code Mode script drops its command handle. WorldState retains it whi
 
 ## Window 2 (after request 3: settings changed (model))
 -- request 4 (turn) --
-00:additional_tools/developer (3; hash=a89029a036f4c860):
-        - namespace/functions; hash=03340277aa23936f
+00:additional_tools/developer (3; hash=f5aa3d3c8456815e):
+        - namespace/functions; hash=04fb2f837d017e37
           - custom/exec
           - function/wait
           - function/request_user_input
           - function/request_user_input_async
+          - function/timer
         - namespace/clock: Tools for reading and waiting on time.; hash=f402e8c5e9b5e317
           - function/sleep
-        - namespace/collaboration: Tools for spawning and managing sub-agents.; hash=97cc486e5cf7761a
+        - namespace/collaboration: Tools for spawning and managing sub-agents.; hash=ae875a9d734f2fc2
           - function/followup_task
           - function/interrupt_agent
           - function/list_agents
@@ -130,15 +132,16 @@ Scenario: A Code Mode script drops its command handle. WorldState retains it whi
 
 ## Window 3 (after request 5: input diverged at item 00, settings changed (model))
 -- request 6 (turn) --
-00:additional_tools/developer (3; hash=4c816105a4c5511e):
-        - namespace/functions; hash=f6f779209c4af0f3
+00:additional_tools/developer (3; hash=bdf569b23074ec39):
+        - namespace/functions; hash=a7e2c8aad7df5212
           - custom/exec
           - function/wait
           - function/request_user_input
           - function/request_user_input_async
+          - function/timer
         - namespace/clock: Tools for reading and waiting on time.; hash=f402e8c5e9b5e317
           - function/sleep
-        - namespace/collaboration: Tools for spawning and managing sub-agents.; hash=97cc486e5cf7761a
+        - namespace/collaboration: Tools for spawning and managing sub-agents.; hash=ae875a9d734f2fc2
           - function/followup_task
           - function/interrupt_agent
           - function/list_agents
@@ -175,8 +178,8 @@ Scenario: A Code Mode script drops its command handle. WorldState retains it whi
     </command_sessions>
 11:message/developer:
     This is an incremental tools update. Previously declared tools remain available for direct calls unless ...here, its latest definition replaces the earlier one. [hash=bceb65fad1afdf9c]
-12:additional_tools/developer (1; hash=b35547cfcd768d37):
-        - namespace/functions; hash=73138b3f4a7eafaf
+12:additional_tools/developer (1; hash=598bec7ad648e5f4):
+        - namespace/functions; hash=34adeade9f2cd102
           - custom/exec
 13:message/developer:
     <model_instructions>
@@ -193,45 +196,53 @@ Scenario: A Code Mode script drops its command handle. WorldState retains it whi
     1000: exited; poll to collect
     </command_sessions>
 17:message/user:
+    <codex_internal_context source="background_shell">
+    [Background shell completed] session ID: 1000
+    Command: ["/usr/bin/bash", "-c", "while [ ! -f release-command ]; do sleep 0.02; done; printf finished; exit 7"]
+    Exit code: 7
+    finished
+
+    </codex_internal_context>
+18:message/user:
     Check the command after it exits.
 -- request 8 (turn) --
-18:message/user:
+19:message/user:
     Collect the final command result.
 -- request 9 (turn) --
-19:custom_tool_call/exec:const result = await tools.write_stdin({session_id: 1000, chars: ""}); text({output: result.output, exit_code: result.exit_code});
-20:custom_tool_call_output:Script completed
+20:custom_tool_call/exec:const result = await tools.write_stdin({session_id: 1000, chars: ""}); text({output: result.output, exit_code: result.exit_code});
+21:custom_tool_call_output:Script completed
     Wall time <DURATION> seconds
     Output:
      | {"output":"finished","exit_code":7}
-21:message/developer:
+22:message/developer:
     <command_sessions>
     Current command sessions for this thread (supersedes earlier snapshots). Exited sessions retain results ... busy with a tool interaction or result finalization. [hash=e247ea1c0c96e976]
     None.
     </command_sessions>
 -- request 10 (turn) --
-22:message/user:
+23:message/user:
     Start another command before restarting.
 -- request 11 (turn) --
-23:custom_tool_call/exec:// @exec: {"yield_time_ms": 30000}
+24:custom_tool_call/exec:// @exec: {"yield_time_ms": 30000}
     const result = await tools.exec_command({cmd: "while [ ! -f release-second-command ]; do sleep 0.02; don...inished; exit 7", login: false, yield_time_ms: 250}); [hash=f914f064e7e2bfce]
     text(result.output);
-24:custom_tool_call_output:Script completed
+25:custom_tool_call_output:Script completed
     Wall time <DURATION> seconds
     Output:
 
-25:message/developer:
+26:message/developer:
     <command_sessions>
     Current command sessions for this thread (supersedes earlier snapshots). Exited sessions retain results ... busy with a tool interaction or result finalization. [hash=e247ea1c0c96e976]
     1001: running
     </command_sessions>
 -- request 12 (turn) --
-26:message/developer:
+27:message/developer:
     <command_sessions>
     Current command sessions for this thread (supersedes earlier snapshots). Exited sessions retain results ... busy with a tool interaction or result finalization. [hash=e247ea1c0c96e976]
     None.
     </command_sessions>
-27:message/user:
-    <ENVIRONMENT_CONTEXT>
 28:message/user:
+    <ENVIRONMENT_CONTEXT>
+29:message/user:
     Check command sessions after restarting.
-29:configuration_update:reasoning={"effort":"low"}
+30:configuration_update:reasoning={"effort":"low"}

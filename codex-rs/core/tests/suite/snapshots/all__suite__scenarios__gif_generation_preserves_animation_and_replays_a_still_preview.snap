@@ -16,11 +16,12 @@ Settings:
   text: {"verbosity":"low"}
   tool_choice: "auto"
 -- request 1 (turn) --
-00:additional_tools/developer (3; hash=cec010d63fda60d5):
-        - namespace/functions; hash=106dd1b983efd2f7
+00:additional_tools/developer (3; hash=4f15c87aa7daed65):
+        - namespace/functions; hash=5900ae3af8a19e79
           - function/exec_command
           - function/write_stdin
           - function/request_user_input
+          - function/timer
           - custom/apply_patch
           - function/view_image
         - namespace/image_gen: Tools in the image_gen namespace.; hash=7f9a214246396279
