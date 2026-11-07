@@ -96,6 +96,7 @@ fn parse_unified_exec_output(raw: &str) -> Result<ParsedUnifiedExecOutput> {
             r#"Wall time: (?P<wall_time>-?\d+(?:\.\d+)?) seconds\n"#,
             r#"(?:Process exited with code (?P<exit_code>-?\d+)\n)?"#,
             r#"(?:Process running with session ID (?P<process_id>-?\d+)\n)?"#,
+            r#"(?:You will be notified automatically[^\n]*\n)?"#,
             r#"(?:Original token count: (?P<original_token_count>\d+)\n)?"#,
             r#"Output:\n?(?P<output>.*)$"#,
         ))
@@ -4098,4 +4099,59 @@ fn assert_command(command: &[String], expected_args: &str, expected_cmd: &str) {
     );
     assert_eq!(command[1], expected_args);
     assert_eq!(command[2], expected_cmd);
+}
+
+#[test_case::test_case(0; "success")]
+#[test_case::test_case(7; "failure")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn background_shell_completion_resumes_idle_session(exit_code: i32) -> Result<()> {
+    skip_if_target_windows!(Ok(()), "uses a POSIX command fixture");
+    skip_if_no_network!(Ok(()));
+    skip_if_sandbox!(Ok(()));
+    let server = start_mock_server().await;
+    let mut builder = test_codex();
+    let test = builder.build_with_auto_env(&server).await?;
+    let release = test.workspace_path("release-background-shell");
+    let args = json!({
+        "cmd": format!("while [ ! -f '{}' ]; do sleep 0.05; done; printf 'background-result'; exit {exit_code}", release.display()),
+        "yield_time_ms": 250,
+    });
+    let requests = mount_sse_sequence(
+        &server,
+        vec![
+            sse(vec![
+                ev_response_created("background-start"),
+                ev_function_call("background-shell", "exec_command", &args.to_string()),
+                ev_completed("background-start"),
+            ]),
+            sse(vec![
+                ev_response_created("background-idle"),
+                ev_assistant_message("waiting", "Waiting for completion"),
+                ev_completed("background-idle"),
+            ]),
+            sse(vec![
+                ev_response_created("background-resumed"),
+                ev_assistant_message("handled", "Handled the command failure"),
+                ev_completed("background-resumed"),
+            ]),
+        ],
+    )
+    .await;
+    submit_unified_exec_turn(&test, "Run in background", PermissionProfile::Disabled).await?;
+    wait_for_event(&test.codex, |event| {
+        matches!(event, EventMsg::TurnComplete(_))
+    })
+    .await;
+    fs::write(release, "release")?;
+    wait_for_event(&test.codex, |event| {
+        matches!(event, EventMsg::TurnComplete(_))
+    })
+    .await;
+    let requests = requests.requests();
+    assert_eq!(requests.len(), 3);
+    let body = requests[2].body_json().to_string();
+    assert!(body.contains("[Background shell completed]"));
+    assert!(body.contains("background-result"));
+    assert!(body.contains(&format!("Exit code: {exit_code}")));
+    Ok(())
 }

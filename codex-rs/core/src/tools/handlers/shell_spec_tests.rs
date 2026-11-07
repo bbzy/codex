@@ -14,11 +14,11 @@ fn exec_command_tool_matches_expected_spec() {
 
     let description = if cfg!(windows) {
         format!(
-            "Runs a command in a PTY, returning output or a session ID for ongoing interaction.{}",
+            "Runs a command in a PTY, returning output or a session ID for ongoing interaction. Background completion automatically notifies this session; do not poll just to wait for completion.{}",
             windows_shell_guidance_description()
         )
     } else {
-        "Runs a command in a PTY, returning output or a session ID for ongoing interaction."
+        "Runs a command in a PTY, returning output or a session ID for ongoing interaction. Background completion automatically notifies this session; do not poll just to wait for completion."
             .to_string()
     };
     let yield_time_ms_description = if cfg!(windows) {

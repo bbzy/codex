@@ -89,11 +89,11 @@ pub(crate) fn create_exec_command_tool_with_environment_id(
         name: "exec_command".to_string(),
         description: if include_windows_shell_guidance {
             format!(
-                "Runs a command in a PTY, returning output or a session ID for ongoing interaction.\n\n{}",
+                "Runs a command in a PTY, returning output or a session ID for ongoing interaction. Background completion automatically notifies this session; do not poll just to wait for completion.\n\n{}",
                 windows_shell_guidance()
             )
         } else {
-            "Runs a command in a PTY, returning output or a session ID for ongoing interaction."
+            "Runs a command in a PTY, returning output or a session ID for ongoing interaction. Background completion automatically notifies this session; do not poll just to wait for completion."
                 .to_string()
         },
         strict: false,

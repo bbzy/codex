@@ -185,7 +185,35 @@ pub(crate) fn spawn_exit_watcher(
         if let Some(network_denial_monitor) = network_denial_monitor {
             let _ = network_denial_monitor.await;
         }
+        process
+            .output_handles()
+            .collection_finished
+            .cancelled()
+            .await;
         let _interaction_guard = interaction_lock.lock_owned().await;
+        let completion = if process.notify_on_completion.load(Ordering::Acquire)
+            && !process.termination_requested.load(Ordering::Acquire)
+        {
+            let output = resolve_aggregated_output(&output_buffer, String::new()).await;
+            let output = codex_utils_output_truncation::formatted_truncate_text(
+                &output,
+                model_info.truncation_policy.into(),
+            );
+            let body = format!(
+                "[Background shell completed] session ID: {process_id}\nCommand: {command:?}\nExit code: {}\n{output}\n{}",
+                process.exit_code().unwrap_or(-1),
+                process.failure_message().unwrap_or_default(),
+            );
+            Some(codex_context_fragments::ContextualUserFragment::into(
+                crate::context::InternalModelContextFragment::new(
+                    crate::context::InternalContextSource::from_static("background_shell"),
+                    body,
+                ),
+            ))
+        } else {
+            None
+        };
+        let completion_session = Arc::clone(&session_ref);
 
         let duration = Instant::now().saturating_duration_since(started_at);
         let plugin_metrics_sidecar = plugin_metrics_sidecar
@@ -238,6 +266,14 @@ pub(crate) fn spawn_exit_watcher(
                 timed_out,
             )
             .await;
+        }
+        drop(_interaction_guard);
+        if let Some(completion) = completion
+            && let Err(error) = completion_session
+                .deliver_background_completion(completion)
+                .await
+        {
+            tracing::warn!(%error, "failed to deliver background shell completion");
         }
     });
 }

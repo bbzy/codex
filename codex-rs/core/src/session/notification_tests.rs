@@ -87,3 +87,38 @@ async fn task_finish_preserves_notification_budget_and_queued_user_input() {
         strip_response_item_ids(&strip_metadata_from_items(&expected)),
     );
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn background_completion_queues_without_preempting_user_request() {
+    let (session, turn, _rx) = make_session_and_context_with_rx().await;
+    session
+        .spawn_task(
+            Arc::clone(&turn),
+            Vec::new(),
+            NeverEndingTask {
+                kind: TaskKind::Regular,
+                listen_to_cancellation_token: false,
+            },
+        )
+        .await;
+    let preempt = tokio_util::sync::CancellationToken::new();
+    let _watch = session
+        .input_queue
+        .watch_user_input(&session.active_turn, &turn.sub_id, preempt.clone())
+        .await;
+    let item = codex_context_fragments::ContextualUserFragment::into(
+        crate::context::InternalModelContextFragment::new(
+            crate::context::InternalContextSource::from_static("background_shell"),
+            "shell finished".to_string(),
+        ),
+    );
+    session.deliver_background_completion(item).await.unwrap();
+    assert!(
+        session
+            .input_queue
+            .has_pending_input(&session.active_turn)
+            .await
+    );
+    tokio::task::yield_now().await;
+    assert!(!preempt.is_cancelled());
+}

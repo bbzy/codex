@@ -282,7 +282,7 @@ fn one_shot_exec_command_spec(spec: ToolSpec) -> ToolSpec {
         unreachable!("exec_command has a function schema");
     };
     spec.description = spec.description.replacen(
-        "Runs a command in a PTY, returning output or a session ID for ongoing interaction.",
+        "Runs a command in a PTY, returning output or a session ID for ongoing interaction. Background completion automatically notifies this session; do not poll just to wait for completion.",
         "Runs a command to completion and returns its output. The process is terminated on timeout or cancellation and cannot be resumed.",
         1,
     );
