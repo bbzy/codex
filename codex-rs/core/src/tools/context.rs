@@ -558,6 +558,7 @@ impl ExecCommandToolOutput {
 
         if let Some(process_id) = &self.process_id {
             sections.push(format!("Process running with session ID {process_id}"));
+            sections.push("You will be notified automatically when this command completes. Continue independent work; if there is nothing else to do, end your response. Do not poll for completion.".to_string());
         }
 
         if let Some(original_token_count) = self.original_token_count {

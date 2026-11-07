@@ -32,6 +32,13 @@ pub(crate) fn validate_injected_response_item(item: &ResponseItem) -> CodexResul
 }
 
 impl Session {
+    pub(crate) async fn deliver_background_completion(
+        self: &std::sync::Arc<Self>,
+        item: ResponseItem,
+    ) -> CodexResult<()> {
+        super::turn_input::deliver_background_completion(self, item).await
+    }
+
     /// Returns the input if there is no active turn to inject into.
     #[expect(
         clippy::await_holding_invalid_type,

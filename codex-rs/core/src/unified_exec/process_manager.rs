@@ -852,6 +852,10 @@ impl UnifiedExecProcessManager {
             (None, exit_code)
         };
 
+        if response_process_id.is_some() && exit_code.is_none() {
+            process.notify_on_completion.store(true, Ordering::Release);
+        }
+
         let response = ExecCommandToolOutput {
             event_call_id: context.call_id.clone(),
             chunk_id,

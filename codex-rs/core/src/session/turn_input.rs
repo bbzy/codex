@@ -349,6 +349,57 @@ fn user_input_metadata(request: &TurnInputRequest) -> UserInputMetadata {
     }
 }
 
+/// Delivers background command completion without preempting an active request.
+/// Admission and injection recheck ownership so a finishing turn cannot lose the result.
+pub(super) async fn deliver_background_completion(
+    session: &Arc<Session>,
+    item: ResponseItem,
+) -> CodexResult<()> {
+    loop {
+        if session.services.local_agent_runtime.shutdown.is_cancelled() {
+            return Ok(());
+        }
+        if session.inject_if_running(vec![item.clone()]).await.is_ok() {
+            return Ok(());
+        }
+        let finishing = session
+            .active_turn
+            .lock()
+            .await
+            .as_ref()
+            .and_then(|turn| turn.finishing.clone());
+        if let Some(finishing) = finishing {
+            finishing.cancelled().await;
+            continue;
+        }
+        let start_options = session
+            .services
+            .thread_extension_data
+            .get::<TurnStartOptions>()
+            .map(|options| options.as_ref().clone())
+            .unwrap_or_default();
+        let result = start_if_idle(
+            session,
+            TurnInputRequest::new(SubmittedTurnInput::ResponseItem(item.clone()))
+                .on_start(TurnStartOptions {
+                    turn_trigger: Some("background_shell".to_string()),
+                    ..start_options
+                })
+                .into(),
+            Uuid::new_v4().to_string(),
+            TurnStartKind::Recovery,
+            None,
+        )
+        .await?;
+        match result {
+            TurnInputSubmission::NotSubmitted {
+                reason: NotSubmittedReason::NotIdle | NotSubmittedReason::PendingTriggerTurn,
+            } => tokio::task::yield_now().await,
+            _ => return Ok(()),
+        }
+    }
+}
+
 async fn start_or_steer(
     session: &Arc<Session>,
     request: WithTurnExtensionData<TurnInputRequest>,
