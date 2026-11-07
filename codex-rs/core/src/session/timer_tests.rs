@@ -309,3 +309,54 @@ async fn run_timer_removes_the_timer_after_repeated_wake_failures() {
     );
 }
 
+#[test]
+fn timer_notifications_follow_registry_transitions() {
+    use codex_protocol::protocol::EventMsg;
+    let (tx, rx) = async_channel::unbounded();
+    let thread_id = ThreadId::from_u128(1);
+    let timer = SessionTimer::new(thread_id, tx);
+    let read = || match rx.try_recv().expect("timer update").msg {
+        EventMsg::ThreadTimerUpdated(event) => {
+            assert_eq!(event.thread_id, thread_id);
+            event.timer
+        }
+        event => panic!("unexpected event {event:?}"),
+    };
+    timer.install(
+        info(TimerKind::Once, 60, epoch(60)),
+        0,
+        CancellationToken::new(),
+    );
+    assert_eq!(read().unwrap().kind, "once");
+    timer.install(
+        info(TimerKind::Interval, 30, epoch(30)),
+        1,
+        CancellationToken::new(),
+    );
+    assert_eq!(read().unwrap().seconds, 30);
+    SessionTimer::consume_or_advance(&timer.active, 1, epoch(30)).unwrap();
+    assert_eq!(read().unwrap().next_at, epoch(60).to_rfc3339());
+    // Stale tasks must neither remove a replacement nor publish a false clear.
+    SessionTimer::remove_if_current(&timer.active, 0);
+    assert!(rx.try_recv().is_err());
+    timer.cancel();
+    assert_eq!(read(), None);
+    timer.cancel();
+    assert!(rx.try_recv().is_err());
+    timer.install(
+        info(TimerKind::Once, 10, epoch(10)),
+        2,
+        CancellationToken::new(),
+    );
+    assert!(read().is_some());
+    SessionTimer::consume_or_advance(&timer.active, 2, epoch(10)).unwrap();
+    assert_eq!(read(), None);
+    timer.install(
+        info(TimerKind::Interval, 10, epoch(10)),
+        3,
+        CancellationToken::new(),
+    );
+    assert!(read().is_some());
+    SessionTimer::remove_if_current(&timer.active, 3);
+    assert_eq!(read(), None);
+}

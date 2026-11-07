@@ -6848,6 +6848,37 @@ class TurnStartedThreadTimelineEntry(BaseModel):
     type: Annotated[Literal["turnStarted"], Field(title="TurnStartedThreadTimelineEntryType")]
 
 
+class ThreadTimer(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    kind: str
+    next_at: Annotated[str, Field(alias="nextAt")]
+    seconds: Annotated[int, Field(ge=0)]
+
+
+class ThreadTimerGetParams(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    thread_id: Annotated[str, Field(alias="threadId")]
+
+
+class ThreadTimerGetResponse(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    timer: ThreadTimer | None = None
+
+
+class ThreadTimerUpdatedNotification(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    thread_id: Annotated[str, Field(alias="threadId")]
+    timer: ThreadTimer | None = None
+
+
 class ThreadUnarchiveParams(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
@@ -7600,6 +7631,15 @@ class ThreadNameSetRequest(BaseModel):
     id: RequestId
     method: Annotated[Literal["thread/name/set"], Field(title="Thread/name/setRequestMethod")]
     params: ThreadSetNameParams
+
+
+class ThreadTimerGetRequest(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    id: RequestId
+    method: Annotated[Literal["thread/timer/get"], Field(title="Thread/timer/getRequestMethod")]
+    params: ThreadTimerGetParams
 
 
 class ThreadGoalGetRequest(BaseModel):
@@ -10193,6 +10233,23 @@ class ThreadAttachmentUpdatedServerNotification(BaseModel):
         Field(title="Thread/attachment/updatedNotificationMethod"),
     ]
     params: ThreadAttachmentUpdatedNotification
+
+
+class ThreadTimerUpdatedServerNotification(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    emitted_at_ms: Annotated[
+        int | None,
+        Field(
+            alias="emittedAtMs",
+            description="Unix timestamp (in milliseconds) when app-server emitted this notification.",
+        ),
+    ] = None
+    method: Annotated[
+        Literal["thread/timer/updated"], Field(title="Thread/timer/updatedNotificationMethod")
+    ]
+    params: ThreadTimerUpdatedNotification
 
 
 class ThreadPredictionUpdatedServerNotification(BaseModel):
@@ -13809,6 +13866,7 @@ class ClientRequest(
         | ThreadUnsubscribeRequest
         | ThreadNameSetRequest
         | ThreadGoalSetRequest
+        | ThreadTimerGetRequest
         | ThreadGoalGetRequest
         | ThreadGoalClearRequest
         | ThreadMetadataUpdateRequest
@@ -13921,6 +13979,7 @@ class ClientRequest(
         | ThreadUnsubscribeRequest
         | ThreadNameSetRequest
         | ThreadGoalSetRequest
+        | ThreadTimerGetRequest
         | ThreadGoalGetRequest
         | ThreadGoalClearRequest
         | ThreadMetadataUpdateRequest
@@ -14210,6 +14269,7 @@ class ServerNotification(
         | ThreadNameUpdatedServerNotification
         | ThreadSectionChangedServerNotification
         | ThreadAttachmentUpdatedServerNotification
+        | ThreadTimerUpdatedServerNotification
         | ThreadGoalUpdatedServerNotification
         | ThreadPredictionUpdatedServerNotification
         | ThreadGoalClearedServerNotification
@@ -14299,6 +14359,7 @@ class ServerNotification(
         | ThreadNameUpdatedServerNotification
         | ThreadSectionChangedServerNotification
         | ThreadAttachmentUpdatedServerNotification
+        | ThreadTimerUpdatedServerNotification
         | ThreadGoalUpdatedServerNotification
         | ThreadPredictionUpdatedServerNotification
         | ThreadGoalClearedServerNotification
