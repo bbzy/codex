@@ -352,15 +352,6 @@ impl CapturedSideWork {
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, IntoStaticStr)]
 pub(crate) enum AppEvent {
-    ReadWakeTimer {
-        thread_id: ThreadId,
-        revision: Uuid,
-    },
-    WakeTimerRead {
-        thread_id: ThreadId,
-        revision: Uuid,
-        result: Result<Option<codex_protocol::protocol::ThreadTimer>, String>,
-    },
     AccountEmailLoaded {
         request_id: uuid::Uuid,
         email: Option<String>,
