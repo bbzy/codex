@@ -322,7 +322,6 @@ pub(crate) struct BottomPane {
     disable_paste_burst: bool,
     is_task_running: bool,
     wake_timer_message: Option<String>,
-    wake_timer_revision: uuid::Uuid,
     esc_backtrack_hint: bool,
     animations_enabled: bool,
     effects: codex_config::types::TuiEffects,
@@ -423,7 +422,6 @@ impl BottomPane {
             disable_paste_burst,
             is_task_running: false,
             wake_timer_message: None,
-            wake_timer_revision: uuid::Uuid::new_v4(),
             status: None,
             hook_status_message: None,
             inline_banner: None,
@@ -1405,33 +1403,7 @@ impl BottomPane {
 
     // esc_backtrack_hint_visible removed; hints are controlled internally.
 
-    pub(crate) fn begin_wake_timer_read(&mut self) -> uuid::Uuid {
-        self.wake_timer_message = None;
-        self.wake_timer_revision = uuid::Uuid::new_v4();
-        self.request_redraw();
-        self.wake_timer_revision
-    }
-
-    pub(crate) fn finish_wake_timer_read(
-        &mut self,
-        revision: uuid::Uuid,
-        timer: Result<Option<codex_protocol::protocol::ThreadTimer>, String>,
-    ) {
-        if revision != self.wake_timer_revision {
-            return;
-        }
-        match timer {
-            Ok(timer) => self.set_wake_timer(timer),
-            Err(_) => {
-                self.wake_timer_message =
-                    Some("Timer status unavailable; reconnect to refresh".to_string());
-                self.request_redraw();
-            }
-        }
-    }
-
     pub(crate) fn set_wake_timer(&mut self, timer: Option<codex_protocol::protocol::ThreadTimer>) {
-        self.wake_timer_revision = uuid::Uuid::new_v4();
         self.wake_timer_message = timer.map(|timer| {
             let kind = if timer.kind == "once" {
                 "Once".to_string()
@@ -2808,17 +2780,16 @@ mod tests {
     }
 
     #[test]
-    fn wake_timer_survives_completed_work_and_rejects_stale_reads() {
+    fn wake_timer_survives_completed_work_and_clears_on_exit() {
         let (tx, _) = unbounded_channel();
         let mut pane = test_pane(AppEventSender::new(tx));
+        assert!(pane.wake_timer_message.is_none());
         let timer = codex_protocol::protocol::ThreadTimer {
             kind: "interval".into(),
             seconds: 300,
             next_at: "2026-11-09T07:30:00Z".into(),
         };
-        let revision = pane.begin_wake_timer_read();
         pane.set_wake_timer(Some(timer));
-        pane.finish_wake_timer_read(revision, Ok(None));
         assert!(
             pane.wake_timer_message
                 .as_ref()
@@ -2844,19 +2815,6 @@ mod tests {
             assert!(line.ends_with(' '));
         }
 
-        pane.set_wake_timer(None);
-        assert!(pane.wake_timer_message.is_none());
-        let old = pane.begin_wake_timer_read();
-        let current = pane.begin_wake_timer_read();
-        pane.finish_wake_timer_read(old, Err("old thread".into()));
-        assert!(pane.wake_timer_message.is_none());
-        pane.finish_wake_timer_read(current, Err("disconnected".into()));
-        assert!(
-            pane.wake_timer_message
-                .as_ref()
-                .unwrap()
-                .contains("unavailable")
-        );
         pane.set_wake_timer(None);
         assert!(pane.wake_timer_message.is_none());
     }

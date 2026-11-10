@@ -170,22 +170,6 @@ impl App {
             event => (event, None),
         };
         match event {
-            AppEvent::ReadWakeTimer { thread_id, revision } => {
-                let handle = app_server.request_handle();
-                let tx = self.app_event_tx.clone();
-                tokio::spawn(async move {
-                    let result = handle.request_typed(codex_app_server_protocol::ClientRequest::ThreadTimerGet {
-                        request_id: codex_app_server_protocol::RequestId::String(uuid::Uuid::new_v4().to_string()),
-                        params: codex_app_server_protocol::ThreadTimerGetParams { thread_id: thread_id.to_string() },
-                    }).await.map(|response: codex_app_server_protocol::ThreadTimerGetResponse| response.timer).map_err(|error| error.to_string());
-                    tx.send(AppEvent::WakeTimerRead { thread_id, revision, result });
-                });
-            }
-            AppEvent::WakeTimerRead { thread_id, revision, result } => {
-                if self.current_displayed_thread_id() == Some(thread_id) {
-                    self.chat_widget.finish_wake_timer_read(revision, result);
-                }
-            }
             AppEvent::OpenDaemonMenu => self.open_daemon_menu(),
             AppEvent::ConfirmDaemonRestart => self.confirm_daemon_restart(),
             AppEvent::RunDaemonRestart => {

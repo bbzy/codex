@@ -609,8 +609,6 @@ export type { ThreadStartedNotification } from "./ThreadStartedNotification";
 export type { ThreadStatus } from "./ThreadStatus";
 export type { ThreadStatusChangedNotification } from "./ThreadStatusChangedNotification";
 export type { ThreadTimelineEntry } from "./ThreadTimelineEntry";
-export type { ThreadTimerGetParams } from "./ThreadTimerGetParams";
-export type { ThreadTimerGetResponse } from "./ThreadTimerGetResponse";
 export type { ThreadTimerUpdatedNotification } from "./ThreadTimerUpdatedNotification";
 export type { ThreadTokenUsage } from "./ThreadTokenUsage";
 export type { ThreadTokenUsageUpdatedNotification } from "./ThreadTokenUsageUpdatedNotification";

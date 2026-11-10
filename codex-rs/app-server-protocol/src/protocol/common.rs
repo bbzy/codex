@@ -633,11 +633,6 @@ client_request_definitions! {
         serialization: thread_id(params.thread_id),
         response: v2::ThreadGoalSetResponse,
     },
-    ThreadTimerGet => "thread/timer/get" {
-        params: v2::ThreadTimerGetParams,
-        serialization: thread_id(params.thread_id),
-        response: v2::ThreadTimerGetResponse,
-    },
     ThreadGoalGet => "thread/goal/get" {
         params: v2::ThreadGoalGetParams,
         serialization: thread_id(params.thread_id),

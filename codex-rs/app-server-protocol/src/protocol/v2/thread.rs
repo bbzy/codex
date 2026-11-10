@@ -2248,20 +2248,6 @@ pub struct ContextCompactedNotification {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
-pub struct ThreadTimerGetParams {
-    pub thread_id: String,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export_to = "v2/")]
-pub struct ThreadTimerGetResponse {
-    pub timer: Option<codex_protocol::protocol::ThreadTimer>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export_to = "v2/")]
 pub struct ThreadTimerUpdatedNotification {
     pub thread_id: String,
     pub timer: Option<codex_protocol::protocol::ThreadTimer>,

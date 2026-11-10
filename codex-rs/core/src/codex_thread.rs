@@ -915,9 +915,9 @@ impl CodexThread {
             .await;
     }
 
-    /// Current runtime-only wake schedule, without starting a turn.
-    pub fn timer_info(&self) -> Option<codex_protocol::protocol::ThreadTimer> {
-        self.session.timer.get().map(|timer| timer.display_info())
+    /// Cancels the wake timer when the last client leaves this session.
+    pub fn cancel_timer(&self) {
+        self.session.timer.cancel();
     }
 
     /// Records an explicit user goal mutation without scheduling a model response.

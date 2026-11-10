@@ -534,19 +534,6 @@ enum RunningThreadResumeResult {
 }
 
 impl ThreadRequestProcessor {
-    pub(crate) async fn thread_timer_get(
-        &self,
-        params: codex_app_server_protocol::ThreadTimerGetParams,
-    ) -> Result<codex_app_server_protocol::ThreadTimerGetResponse, JSONRPCErrorError> {
-        let thread_id = ThreadId::from_string(&params.thread_id)
-            .map_err(|error| invalid_request(error.to_string()))?;
-        let timer = match self.thread_manager.get_thread(thread_id).await {
-            Ok(thread) => thread.timer_info(),
-            Err(_) => None,
-        };
-        Ok(codex_app_server_protocol::ThreadTimerGetResponse { timer })
-    }
-
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         auth_manager: Arc<AuthManager>,
@@ -1158,6 +1145,13 @@ impl ThreadRequestProcessor {
             .thread_state_manager
             .unsubscribe_connection_from_thread(thread_id, connection_id)
             .await;
+
+        if was_subscribed
+            && !self.thread_state_manager.has_subscribers(thread_id).await
+            && let Ok(thread) = self.thread_manager.get_thread(thread_id).await
+        {
+            thread.cancel_timer();
+        }
 
         if self.thread_manager.get_thread(thread_id).await.is_err() {
             if !self.thread_state_manager.has_subscribers(thread_id).await {
@@ -3906,9 +3900,12 @@ impl ThreadRequestProcessor {
 
         for thread_id in thread_ids {
             let _goal_resume_guard = self.thread_state_manager.lock_goal_resume(thread_id).await;
-            if self.thread_manager.get_thread(thread_id).await.is_err()
-                && !self.thread_state_manager.has_subscribers(thread_id).await
-            {
+            if self.thread_state_manager.has_subscribers(thread_id).await {
+                continue;
+            }
+            if let Ok(thread) = self.thread_manager.get_thread(thread_id).await {
+                thread.cancel_timer();
+            } else {
                 // Reconcile stale app-server bookkeeping when the thread has already been
                 // removed from the core manager.
                 self.finalize_thread_teardown(thread_id).await;

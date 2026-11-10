@@ -6563,20 +6563,6 @@ class ThreadTimer(BaseModel):
     seconds: Annotated[int, Field(ge=0)]
 
 
-class ThreadTimerGetParams(BaseModel):
-    model_config = ConfigDict(
-        populate_by_name=True,
-    )
-    thread_id: Annotated[str, Field(alias="threadId")]
-
-
-class ThreadTimerGetResponse(BaseModel):
-    model_config = ConfigDict(
-        populate_by_name=True,
-    )
-    timer: ThreadTimer | None = None
-
-
 class ThreadTimerUpdatedNotification(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
@@ -7297,15 +7283,6 @@ class ThreadNameSetRequest(BaseModel):
     id: RequestId
     method: Annotated[Literal["thread/name/set"], Field(title="Thread/name/setRequestMethod")]
     params: ThreadSetNameParams
-
-
-class ThreadTimerGetRequest(BaseModel):
-    model_config = ConfigDict(
-        populate_by_name=True,
-    )
-    id: RequestId
-    method: Annotated[Literal["thread/timer/get"], Field(title="Thread/timer/getRequestMethod")]
-    params: ThreadTimerGetParams
 
 
 class ThreadGoalGetRequest(BaseModel):
@@ -13349,7 +13326,6 @@ class ClientRequest(
         | ThreadUnsubscribeRequest
         | ThreadNameSetRequest
         | ThreadGoalSetRequest
-        | ThreadTimerGetRequest
         | ThreadGoalGetRequest
         | ThreadGoalClearRequest
         | ThreadMetadataUpdateRequest
@@ -13459,7 +13435,6 @@ class ClientRequest(
         | ThreadUnsubscribeRequest
         | ThreadNameSetRequest
         | ThreadGoalSetRequest
-        | ThreadTimerGetRequest
         | ThreadGoalGetRequest
         | ThreadGoalClearRequest
         | ThreadMetadataUpdateRequest

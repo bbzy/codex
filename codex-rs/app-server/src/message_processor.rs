@@ -1410,9 +1410,6 @@ impl MessageProcessor {
                     .thread_goal_set(request_id.clone(), params)
                     .await
             }
-            ClientRequest::ThreadTimerGet { params, .. } => {
-                self.thread_processor.thread_timer_get(params).await.map(|response| Some(response.into()))
-            }
             ClientRequest::ThreadGoalGet { params, .. } => {
                 self.thread_goal_processor.thread_goal_get(params).await
             }

@@ -2164,30 +2164,6 @@
             },
             "method": {
               "enum": [
-                "thread/timer/get"
-              ],
-              "title": "Thread/timer/getRequestMethod",
-              "type": "string"
-            },
-            "params": {
-              "$ref": "#/definitions/ThreadTimerGetParams"
-            }
-          },
-          "required": [
-            "id",
-            "method",
-            "params"
-          ],
-          "title": "Thread/timer/getRequest",
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/definitions/RequestId"
-            },
-            "method": {
-              "enum": [
                 "thread/goal/get"
               ],
               "title": "Thread/goal/getRequestMethod",
@@ -23924,36 +23900,6 @@
         "nextAt",
         "seconds"
       ],
-      "type": "object"
-    },
-    "ThreadTimerGetParams": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "properties": {
-        "threadId": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "threadId"
-      ],
-      "title": "ThreadTimerGetParams",
-      "type": "object"
-    },
-    "ThreadTimerGetResponse": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "properties": {
-        "timer": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/ThreadTimer"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "title": "ThreadTimerGetResponse",
       "type": "object"
     },
     "ThreadTimerUpdatedNotification": {

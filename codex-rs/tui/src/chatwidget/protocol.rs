@@ -1,14 +1,6 @@
 use super::*;
 
 impl ChatWidget {
-    pub(crate) fn finish_wake_timer_read(
-        &mut self,
-        revision: uuid::Uuid,
-        result: Result<Option<codex_protocol::protocol::ThreadTimer>, String>,
-    ) {
-        self.bottom_pane.finish_wake_timer_read(revision, result);
-    }
-
     pub(crate) fn handle_server_notification(
         &mut self,
         notification: ServerNotification,
