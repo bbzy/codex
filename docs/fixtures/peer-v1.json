@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "states": [
+    "idle",
+    "running",
+    "blocked",
+    "not_loaded",
+    "archived"
+  ],
+  "outcomes": [
+    "succeeded",
+    "failed",
+    "interrupted"
+  ],
+  "waitResults": [
+    "completed",
+    "failed",
+    "interrupted",
+    "blocked",
+    "not_loaded",
+    "archived",
+    "timeout",
+    "waiting_interrupted"
+  ],
+  "blocked": {
+    "sessionID": "existing",
+    "state": "blocked",
+    "blocked": {
+      "reason": "permission",
+      "summary": "Waiting for approval"
+    },
+    "blockers": [
+      {
+        "reason": "permission",
+        "summary": "Waiting for approval"
+      }
+    ],
+    "pendingCount": 1,
+    "lastOutcome": null,
+    "observedAt": "2026-11-13T00:00:00.000Z"
+  }
+}

@@ -19,6 +19,7 @@ use codex_app_server_protocol::JSONRPCError;
 use codex_app_server_protocol::QueuedSubmission;
 use codex_app_server_protocol::RequestId;
 use codex_app_server_protocol::ServerRequest;
+use codex_app_server_protocol::ThreadArchiveParams;
 use codex_app_server_protocol::ThreadItemPayload;
 use codex_app_server_protocol::ThreadListResponse;
 use codex_app_server_protocol::ThreadLoadedListParams;
@@ -971,6 +972,38 @@ async fn a_new_turn_preserves_queued_messages_until_it_completes() -> Result<()>
     }
     assert!(list_queue(&mut app, &thread_id).await?.data.is_empty());
 
+    Ok(())
+}
+
+#[tokio::test]
+async fn queue_list_remains_readable_after_archiving_without_allowing_new_input() -> Result<()> {
+    let (mut app, _home, _server) = queue_app(Vec::new()).await?;
+    let thread = app.start_thread(ThreadStartParams::default()).await?.thread;
+    let _: Value = app
+        .request(|request_id| ClientRequest::ThreadArchive {
+            request_id,
+            params: ThreadArchiveParams {
+                thread_id: thread.id.clone(),
+            },
+        })
+        .await?;
+    assert!(list_queue(&mut app, &thread.id).await?.data.is_empty());
+    let request_id = app
+        .send_raw_request(
+            "thread/queue/add",
+            Some(serde_json::to_value(ThreadQueueAddParams {
+                thread_id: thread.id,
+                input: vec![text("do not run")],
+                client_user_message_id: "archived-input".to_string(),
+            })?),
+        )
+        .await?;
+    let rejected = timeout(
+        READ_TIMEOUT,
+        app.read_stream_until_error_message(RequestId::Integer(request_id)),
+    )
+    .await??;
+    assert!(rejected.error.message.contains("archived"));
     Ok(())
 }
 

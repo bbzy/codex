@@ -70,6 +70,7 @@ mod mcp_cmd;
 mod mcp_login;
 mod migrate_nfs_db;
 mod migrate_rollouts;
+mod peer;
 mod plugin_cmd;
 mod queue_cmd;
 mod remote_control_cmd;
@@ -212,6 +213,9 @@ enum Subcommand {
 
     /// Queue a message for an existing session.
     Queue(QueueCommand),
+
+    /// Communicate with existing local sessions using JSON protocol v1.
+    Peer(peer::PeerCommand),
 
     /// Archive a saved session by id or session name.
     Archive(SessionArchiveCommand),
@@ -1601,6 +1605,18 @@ async fn dispatch_cli(
             .await?;
             println!("{output}");
         }
+        Some(Subcommand::Peer(command)) => {
+            reject_remote_mode_for_subcommand(
+                root_remote.as_deref(),
+                root_remote_auth_token_env.as_deref(),
+                "peer",
+            )?;
+            let output = peer::run(command).await;
+            println!("{output}");
+            if output.get("error").is_some() {
+                std::process::exit(1);
+            }
+        }
         Some(Subcommand::Queue(cmd)) => {
             let output = queue_cmd::run_queue_command(
                 cmd,
@@ -2417,6 +2433,7 @@ fn unsupported_subcommand_name_for_strict_config(
         | Some(Subcommand::ExecServer(_))
         | Some(Subcommand::Resume(_))
         | Some(Subcommand::Queue(_))
+        | Some(Subcommand::Peer(_))
         | Some(Subcommand::Archive(_))
         | Some(Subcommand::Delete(_))
         | Some(Subcommand::Unarchive(_))

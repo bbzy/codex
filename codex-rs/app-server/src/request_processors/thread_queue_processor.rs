@@ -79,7 +79,8 @@ impl ThreadQueueRequestProcessor {
         params: ThreadQueueAddParams,
     ) -> Result<ThreadQueueAddResponse, JSONRPCErrorError> {
         validate_user_input_image_urls(&params.input)?;
-        let (thread_id, loaded_thread, source) = self.require_thread(&params.thread_id).await?;
+        let (thread_id, loaded_thread, source) =
+            self.require_thread(&params.thread_id, false).await?;
         ensure_direct_input_allowed(loaded_thread.as_deref(), &source)?;
         let queued_item = self
             .service()?
@@ -99,7 +100,7 @@ impl ThreadQueueRequestProcessor {
         &self,
         params: ThreadQueueListParams,
     ) -> Result<ThreadQueueListResponse, JSONRPCErrorError> {
-        let (thread_id, _, _) = self.require_thread(&params.thread_id).await?;
+        let (thread_id, _, _) = self.require_thread(&params.thread_id, true).await?;
         let offset = params
             .cursor
             .as_deref()
@@ -137,7 +138,8 @@ impl ThreadQueueRequestProcessor {
         params: ThreadQueueUpdateParams,
     ) -> Result<ThreadQueueUpdateResponse, JSONRPCErrorError> {
         validate_user_input_image_urls(&params.input)?;
-        let (thread_id, loaded_thread, source) = self.require_thread(&params.thread_id).await?;
+        let (thread_id, loaded_thread, source) =
+            self.require_thread(&params.thread_id, false).await?;
         ensure_direct_input_allowed(loaded_thread.as_deref(), &source)?;
         let queued_item = self
             .service()?
@@ -164,7 +166,7 @@ impl ThreadQueueRequestProcessor {
         &self,
         params: ThreadQueueDeleteParams,
     ) -> Result<ThreadQueueDeleteResponse, JSONRPCErrorError> {
-        let (thread_id, _, _) = self.require_thread(&params.thread_id).await?;
+        let (thread_id, _, _) = self.require_thread(&params.thread_id, false).await?;
         let deleted = self
             .service()?
             .delete(thread_id, params.queued_submission_id)
@@ -177,7 +179,7 @@ impl ThreadQueueRequestProcessor {
         &self,
         params: ThreadQueueReorderParams,
     ) -> Result<ThreadQueueReorderResponse, JSONRPCErrorError> {
-        let (thread_id, _, _) = self.require_thread(&params.thread_id).await?;
+        let (thread_id, _, _) = self.require_thread(&params.thread_id, false).await?;
         self.service()?
             .reorder(thread_id, params.queued_submission_ids)
             .await
@@ -190,7 +192,7 @@ impl ThreadQueueRequestProcessor {
         request_id: &ConnectionRequestId,
         params: ThreadQueueStartParams,
     ) -> Result<ThreadQueueStartResponse, JSONRPCErrorError> {
-        let (_, loaded_thread, source) = self.require_thread(&params.thread_id).await?;
+        let (_, loaded_thread, source) = self.require_thread(&params.thread_id, false).await?;
         ensure_direct_input_allowed(loaded_thread.as_deref(), &source)?;
         let thread = loaded_thread
             .ok_or_else(|| invalid_request("resume the thread before starting a queued message"))?;
@@ -255,6 +257,7 @@ impl ThreadQueueRequestProcessor {
     async fn require_thread(
         &self,
         raw_thread_id: &str,
+        include_archived: bool,
     ) -> Result<(ThreadId, Option<Arc<CodexThread>>, SessionSource), JSONRPCErrorError> {
         let thread_id = ThreadId::from_string(raw_thread_id)
             .map_err(|error| invalid_request(format!("invalid thread id: {error}")))?;
@@ -283,7 +286,7 @@ impl ThreadQueueRequestProcessor {
                     }
                     error => internal_error(format!("failed to read thread: {error}")),
                 })?;
-            if stored.archived_at.is_some() {
+            if stored.archived_at.is_some() && !include_archived {
                 return Err(invalid_request(format!(
                     "session {thread_id} is archived. Run `codex unarchive {thread_id}` to unarchive it first."
                 )));

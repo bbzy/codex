@@ -1559,7 +1559,10 @@ fn push_thread_filters_with_preview<'a>(
     if !archived_only && !matches!(section, Some(Some(_))) {
         match relation_filter {
             None => {
-                builder.push(" AND threads.preview <> ''");
+                // An explicit name makes a deliberately empty session discoverable.
+                builder.push(
+                    " AND (threads.preview <> '' OR length(trim(COALESCE(threads.name, ''))) > 0)",
+                );
             }
             Some(crate::ThreadRelationFilter::IncludeAttached) => {
                 builder.push(
@@ -1904,6 +1907,47 @@ mod tests {
             vec![(child, child_metadata.cwd)]
         );
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn named_empty_threads_remain_listed() {
+        let codex_home = unique_temp_dir();
+        let runtime = StateRuntime::init(
+            crate::SqliteConfig::new_for_testing(codex_home.as_path().abs()),
+            "test-provider".to_string(),
+        )
+        .await
+        .unwrap();
+        let thread_id = ThreadId::new();
+        let mut metadata = test_thread_metadata(&codex_home, thread_id, codex_home.clone());
+        metadata.preview = Some(String::new());
+        metadata.first_user_message = None;
+        runtime.upsert_thread(&metadata).await.unwrap();
+        for name in [None, Some(""), Some("named peer")] {
+            runtime.update_thread_name(thread_id, name).await.unwrap();
+            let page = runtime
+                .list_threads(
+                    10,
+                    ThreadFilterOptions {
+                        archived_only: false,
+                        allowed_sources: &[],
+                        model_providers: None,
+                        cwd_filters: None,
+                        section: None,
+                        project_id: None,
+                        anchor: None,
+                        sort_key: SortKey::CreatedAt,
+                        sort_direction: SortDirection::Desc,
+                        search_term: None,
+                    },
+                )
+                .await
+                .unwrap();
+            assert_eq!(page.items.len(), usize::from(name == Some("named peer")));
+            if let Some(item) = page.items.first() {
+                assert_eq!(item.id, thread_id);
+            }
+        }
     }
 
     #[tokio::test]
