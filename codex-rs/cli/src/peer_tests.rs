@@ -93,6 +93,102 @@ fn cli_requires_existing_session_ids_and_supports_queue_wait() {
 }
 
 #[test]
+fn list_directory_options_are_mutually_exclusive() {
+    assert!(PeerCommand::try_parse_from(["peer", "list", "--cur-dir"]).is_ok());
+    assert!(PeerCommand::try_parse_from(["peer", "list", "--dir", "../目录 空格/"]).is_ok());
+    for arguments in [
+        vec!["peer", "list", "--cur-dir", "--dir", "."],
+        vec!["peer", "list", "--dir", ".", "--cur-dir"],
+    ] {
+        assert_eq!(
+            PeerCommand::try_parse_from(arguments).unwrap_err().kind(),
+            clap::error::ErrorKind::ArgumentConflict
+        );
+    }
+    assert!(PeerCommand::try_parse_from(["peer", "list", "--dir"]).is_err());
+}
+
+#[tokio::test]
+async fn list_sends_absolute_directory_filters_with_each_page() -> Result<()> {
+    use futures::SinkExt;
+    use futures::StreamExt;
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
+    use tokio_tungstenite::tungstenite::Message;
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+    let endpoint = format!("ws://{}", listener.local_addr()?);
+    let requests = Arc::new(Mutex::new(Vec::<Value>::new()));
+    let recorded = requests.clone();
+    let server = tokio::spawn(async move {
+        let (stream, _) = listener.accept().await?;
+        let mut websocket = tokio_tungstenite::accept_async(stream).await?;
+        while let Some(frame) = websocket.next().await {
+            let Message::Text(text) = frame? else {
+                continue;
+            };
+            let request: Value = serde_json::from_str(&text)?;
+            let Some(id) = request.get("id") else {
+                continue;
+            };
+            let result = match request["method"].as_str().unwrap() {
+                "initialize" => json!({"userAgent":"test/1"}),
+                "thread/list" => {
+                    recorded.lock().await.push(request["params"].clone());
+                    json!({"data":[], "nextCursor":"next"})
+                }
+                method => anyhow::bail!("unexpected method: {method}"),
+            };
+            websocket
+                .send(Message::Text(
+                    json!({"jsonrpc":"2.0","id":id,"result":result})
+                        .to_string()
+                        .into(),
+                ))
+                .await?;
+        }
+        Ok::<_, anyhow::Error>(())
+    });
+    let mut client = RemoteAppServerClient::connect(RemoteAppServerConnectArgs {
+        endpoint: RemoteAppServerEndpoint::WebSocket {
+            websocket_url: endpoint,
+            auth_token: None,
+        },
+        client_name: "peer_list_test".into(),
+        client_version: "1".into(),
+        experimental_api: true,
+        required_human_approval: false,
+        mcp_server_openai_form_elicitation: false,
+        opt_out_notification_methods: vec![],
+        channel_capacity: 128,
+    })
+    .await?;
+    for arguments in [
+        vec!["peer", "list"],
+        vec!["peer", "list", "--cur-dir"],
+        vec!["peer", "list", "--dir", "目录 空格/"],
+        vec!["peer", "list", "--dir", "目录 空格/", "--cursor", "next"],
+    ] {
+        let command = PeerCommand::try_parse_from(arguments)?;
+        let result = dispatch(&mut client, "test", command.command).await?;
+        assert_eq!(result["nextCursor"], "next");
+    }
+    let requests = requests.lock().await;
+    assert!(requests[0]["cwd"].is_null());
+    assert_eq!(requests[1]["cwd"], json!(std::env::current_dir()?));
+    assert_eq!(
+        requests[2]["cwd"],
+        json!(std::env::current_dir()?.join("目录 空格"))
+    );
+    assert_eq!(requests[3]["cwd"], requests[2]["cwd"]);
+    assert_eq!(requests[3]["cursor"], "next");
+    assert!(requests.iter().all(|request| request["limit"] == 50));
+    client.shutdown().await?;
+    server.abort();
+    Ok(())
+}
+
+#[test]
 fn shared_contract_covers_normalized_status_and_wait_results() {
     let contract: Value =
         serde_json::from_str(include_str!("../../../docs/fixtures/peer-v1.json")).unwrap();
@@ -355,6 +451,38 @@ async fn peer_cli_roundtrip_against_an_isolated_local_service() -> Result<()> {
             .iter()
             .any(|row| row["sessionID"] == session && row["title"] == "named-empty-peer"),
         "{listed}"
+    );
+    let child_directory = home.path().join("目录 空格");
+    std::fs::create_dir_all(&child_directory)?;
+    let child: ThreadStartResponse = rpc(
+        &controller,
+        "thread/start",
+        json!({"cwd":child_directory,"ephemeral":false}),
+    )
+    .await?;
+    let _: Value = rpc(
+        &controller,
+        "thread/name/set",
+        json!({"threadId":child.thread.id,"name":"child peer"}),
+    )
+    .await?;
+    let current = invoke(vec!["list".into(), "--cur-dir".into()]).await?;
+    assert_eq!(
+        current["sessions"].as_array().unwrap().len(),
+        1,
+        "{current}"
+    );
+    assert_eq!(current["sessions"][0]["sessionID"], session);
+    let child_list = invoke(vec!["list".into(), "--dir".into(), "./目录 空格/".into()]).await?;
+    assert_eq!(
+        child_list["sessions"].as_array().unwrap().len(),
+        1,
+        "{child_list}"
+    );
+    assert_eq!(child_list["sessions"][0]["sessionID"], child.thread.id);
+    assert_eq!(
+        invoke(vec!["list".into(), "--dir".into(), "missing".into()]).await?["sessions"],
+        json!([])
     );
     let admitted = invoke(vec![
         "queue".into(),

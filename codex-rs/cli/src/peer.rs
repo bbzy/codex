@@ -29,11 +29,13 @@ use codex_app_server_protocol::ThreadTurnsListResponse;
 use codex_app_server_protocol::TurnStatus;
 use codex_app_server_protocol::UserInput;
 use codex_core::config::find_codex_home;
+use codex_utils_absolute_path::AbsolutePathBuf;
 use serde::Deserialize;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use serde_json::json;
+use std::path::PathBuf;
 use std::time::Duration;
 use std::time::Instant;
 use uuid::Uuid;
@@ -47,6 +49,12 @@ pub(crate) struct PeerCommand {
 #[derive(Debug, Subcommand)]
 enum Operation {
     List {
+        /// Only list sessions in the current working directory.
+        #[arg(long, conflicts_with = "dir")]
+        cur_dir: bool,
+        /// Only list sessions in this directory; relative paths use the current working directory.
+        #[arg(long, conflicts_with = "cur_dir", value_name = "PATH")]
+        dir: Option<PathBuf>,
         #[arg(long)]
         cursor: Option<String>,
     },
@@ -213,13 +221,23 @@ async fn dispatch(
     operation: Operation,
 ) -> Result<Value> {
     match operation {
-        Operation::List { cursor } => {
+        Operation::List {
+            cursor,
+            cur_dir,
+            dir,
+        } => {
+            let directory = dir
+                .or_else(|| cur_dir.then(|| PathBuf::from(".")))
+                .map(AbsolutePathBuf::relative_to_current_dir)
+                .transpose()
+                .context("Failed to resolve list directory")?;
             let page: ThreadListResponse = rpc(
                 client,
                 "thread/list",
                 json!({
                     "cursor": cursor, "limit": 50, "sortKey": "updated_at", "archived": false,
                     "sourceKinds": ["cli", "vscode", "exec", "appServer", "unknown"], "modelProviders": [],
+                    "cwd": directory,
                 }),
             )
             .await?;

@@ -5,7 +5,7 @@ A peer CLI accesses only its own existing local service. It never discovers othe
 ## Commands
 
 ```
-<program> peer list [--cursor CURSOR]
+<program> peer list [--cur-dir | --dir PATH] [--cursor CURSOR]
 <program> peer status --session ID
 <program> peer queue --session ID --message TEXT [--resume] [--wait] [--timeout SECONDS]
 <program> peer wait --receipt RECEIPT [--timeout SECONDS]
@@ -15,6 +15,8 @@ A peer CLI accesses only its own existing local service. It never discovers othe
 Each command writes one JSON object to stdout. Diagnostics go to stderr. Every response contains `version: 1` and `operation`. Errors contain `error: {code, message}` and exit nonzero. Completion, failure, timeout and blocking are structured results rather than transport errors.
 
 `list` returns `sessions` and `nextCursor`; entries have `sessionID`, `title`, `directory`, `updatedAt` (epoch milliseconds), and `status`. The default page has up to 50 recent non-archived top-level sessions, including explicitly named empty sessions. Cursors are opaque and local to their operation and service.
+
+`list --cur-dir` filters by the calling CLI's current working directory; `list --dir PATH` filters by an explicit directory, resolving relative paths against that same working directory. The two options are mutually exclusive. Matching is exact, without including subdirectories or changing to the repository root. Omit both to list all directories. Filtering happens before pagination; repeat the same directory option when following `nextCursor`.
 
 `status` returns a snapshot without sending, loading, resuming, or interrupting work. Its fields are `sessionID`, `state`, `blocked`, `blockers`, `pendingCount`, `lastOutcome`, and `observedAt` (RFC3339). States are `idle`, `running`, `blocked`, `not_loaded`, and `archived`. Block reasons include `permission` and `input`; approval takes precedence in the summary. `lastOutcome` is null until available, then `succeeded`, `failed` or `interrupted`. An idle session may still have queued work; a slow model or tool is not a blocker. Missing sessions and unavailable services are errors, never idle snapshots.
 

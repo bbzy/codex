@@ -755,7 +755,9 @@ impl RolloutRecorder {
                     )
                     .await;
                 }
-                if sort_key == ThreadSortKey::RecencyAt {
+                // Named empty threads are visible in SQLite but absent from preview-only
+                // filesystem scans. Keep them in directory-filtered pages after repair.
+                if sort_key == ThreadSortKey::RecencyAt || cwd_filters.is_some() {
                     if let Some(repaired_db_page) = state_db::list_threads_db(
                         state_db_ctx.as_deref(),
                         sqlite,
