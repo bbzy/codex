@@ -59,17 +59,14 @@ enum Operation {
         cursor: Option<String>,
     },
     Status {
-        #[arg(long)]
         session: String,
     },
     Read {
-        #[arg(long)]
         session: String,
         #[arg(long)]
         cursor: Option<String>,
     },
     Queue {
-        #[arg(long)]
         session: String,
         #[arg(long)]
         message: String,

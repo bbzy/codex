@@ -3921,3 +3921,52 @@ async fn owned_copy_guard_defers_queued_input_until_released() {
         assert!(chat.input_queue.queued_user_messages.is_empty());
     }
 }
+
+#[tokio::test]
+async fn session_id_command_is_local_and_available_while_busy() {
+    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    let id = ThreadId::new();
+    chat.thread_id = Some(id);
+    handle_turn_started(&mut chat, "turn-1");
+    assert!(SlashCommand::SessionId.available_during_task());
+    assert!(SlashCommand::SessionId.available_when_thread_unavailable());
+    assert_eq!(SlashCommand::SessionId.command(), "session-id");
+
+    for _ in 0..2 {
+        chat.dispatch_command(SlashCommand::SessionId);
+        let rendered = drain_insert_history(&mut rx)
+            .iter()
+            .map(|lines| lines_to_single_string(lines))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(rendered.contains(&format!("Session ID: {id}")));
+        assert_matches!(op_rx.try_recv(), Err(TryRecvError::Empty));
+    }
+
+    let next = ThreadId::new();
+    chat.thread_id = Some(next);
+    chat.dispatch_command(SlashCommand::SessionId);
+    let rendered = drain_insert_history(&mut rx)
+        .iter()
+        .map(|lines| lines_to_single_string(lines))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(rendered.contains(&next.to_string()));
+    assert!(!rendered.contains(&id.to_string()));
+    assert_matches!(op_rx.try_recv(), Err(TryRecvError::Empty));
+}
+
+#[tokio::test]
+async fn session_id_command_without_thread_does_not_create_one() {
+    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.thread_id = None;
+    chat.dispatch_command(SlashCommand::SessionId);
+    let rendered = drain_insert_history(&mut rx)
+        .iter()
+        .map(|lines| lines_to_single_string(lines))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(rendered.contains("No current Session"));
+    assert_matches!(op_rx.try_recv(), Err(TryRecvError::Empty));
+    assert!(chat.thread_id().is_none());
+}

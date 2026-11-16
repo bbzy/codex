@@ -66,7 +66,6 @@ fn cli_requires_existing_session_ids_and_supports_queue_wait() {
     let command = PeerCommand::try_parse_from([
         "peer",
         "queue",
-        "--session",
         "id",
         "--message",
         "task",
@@ -84,7 +83,7 @@ fn cli_requires_existing_session_ids_and_supports_queue_wait() {
         }
     ));
     assert_eq!(
-        PeerCommand::try_parse_from(["peer", "status", "--session", "id"])
+        PeerCommand::try_parse_from(["peer", "status", "id"])
             .unwrap()
             .command
             .name(),
@@ -186,6 +185,28 @@ async fn list_sends_absolute_directory_filters_with_each_page() -> Result<()> {
     client.shutdown().await?;
     server.abort();
     Ok(())
+}
+
+#[test]
+fn peer_targets_are_required_positionals() {
+    for operation in ["status", "read", "queue"] {
+        let options = if operation == "queue" {
+            vec!["--message", "task"]
+        } else {
+            vec![]
+        };
+        let mut args = vec!["peer", operation];
+        args.extend(options.clone());
+        assert!(PeerCommand::try_parse_from(args).is_err());
+
+        let mut args = vec!["peer", operation, "--session", "id"];
+        args.extend(options.clone());
+        assert!(PeerCommand::try_parse_from(args).is_err());
+
+        let mut args = vec!["peer", operation, "id"];
+        args.extend(options);
+        assert!(PeerCommand::try_parse_from(args).is_ok());
+    }
 }
 
 #[test]
@@ -486,7 +507,6 @@ async fn peer_cli_roundtrip_against_an_isolated_local_service() -> Result<()> {
     );
     let admitted = invoke(vec![
         "queue".into(),
-        "--session".into(),
         session.clone(),
         "--message".into(),
         "first".into(),
@@ -542,7 +562,6 @@ async fn peer_cli_roundtrip_against_an_isolated_local_service() -> Result<()> {
     );
     let second = invoke(vec![
         "queue".into(),
-        "--session".into(),
         session.clone(),
         "--message".into(),
         "follow-up".into(),
@@ -574,7 +593,6 @@ async fn peer_cli_roundtrip_against_an_isolated_local_service() -> Result<()> {
     );
     let blocked = invoke(vec![
         "queue".into(),
-        "--session".into(),
         session.clone(),
         "--message".into(),
         "ask approval".into(),
@@ -582,7 +600,7 @@ async fn peer_cli_roundtrip_against_an_isolated_local_service() -> Result<()> {
     ])
     .await?;
     assert_eq!(blocked["result"], "blocked", "{blocked}");
-    let snapshot = invoke(vec!["status".into(), "--session".into(), session]).await?;
+    let snapshot = invoke(vec!["status".into(), session]).await?;
     assert_eq!(snapshot["status"]["state"], "blocked", "{snapshot}");
     assert_eq!(snapshot["status"]["blocked"]["reason"], "permission");
     controller.shutdown().await?;

@@ -30,6 +30,8 @@ pub enum SlashCommand {
     Hooks,
     Review,
     Rename,
+    #[strum(serialize = "session-id")]
+    SessionId,
     New,
     Archive,
     Delete,
@@ -99,6 +101,7 @@ impl SlashCommand {
             SlashCommand::Compact => "summarize conversation to prevent hitting the context limit",
             SlashCommand::Recap => "summarize the current conversation now",
             SlashCommand::Review => "review my current changes and find issues",
+            SlashCommand::SessionId => "print the current session ID",
             SlashCommand::Rename => "rename the current thread",
             SlashCommand::Resume => "resume a saved chat",
             SlashCommand::Archive => "archive this session",
@@ -208,6 +211,7 @@ impl SlashCommand {
                 | SlashCommand::Diff
                 | SlashCommand::Mention
                 | SlashCommand::Status
+                | SlashCommand::SessionId
                 | SlashCommand::Daemon
                 | SlashCommand::Warnings
                 | SlashCommand::Pwd
@@ -235,6 +239,7 @@ impl SlashCommand {
                 | SlashCommand::Quit
                 | SlashCommand::Exit
                 | SlashCommand::Status
+                | SlashCommand::SessionId
                 | SlashCommand::Warnings
                 | SlashCommand::DebugConfig
                 | SlashCommand::Pwd
@@ -283,6 +288,7 @@ impl SlashCommand {
             | SlashCommand::Skills
             | SlashCommand::Hooks
             | SlashCommand::Status
+            | SlashCommand::SessionId
             | SlashCommand::Daemon
             | SlashCommand::Warnings
             | SlashCommand::Pwd

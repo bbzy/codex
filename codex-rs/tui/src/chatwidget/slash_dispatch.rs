@@ -539,6 +539,13 @@ impl ChatWidget {
             }
             SlashCommand::Daemon => self.app_event_tx.send(AppEvent::OpenDaemonMenu),
             SlashCommand::Warnings => self.app_event_tx.send(AppEvent::OpenWarnings),
+            SlashCommand::SessionId => {
+                let message = self.thread_id().map_or_else(
+                    || "No current Session. Wait for session initialization.".to_string(),
+                    |id| format!("Session ID: {id}"),
+                );
+                self.add_info_message(message, /*hint*/ None);
+            }
             SlashCommand::Status => {
                 if self.should_prefetch_rate_limits() {
                     let request_id = self.next_status_refresh_request_id;
@@ -1291,6 +1298,7 @@ impl ChatWidget {
         match cmd {
             SlashCommand::Ide
             | SlashCommand::Status
+            | SlashCommand::SessionId
             | SlashCommand::Daemon
             | SlashCommand::Pwd
             | SlashCommand::Usage

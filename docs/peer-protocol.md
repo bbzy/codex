@@ -6,10 +6,10 @@ A peer CLI accesses only its own existing local service. It never discovers othe
 
 ```
 <program> peer list [--cur-dir | --dir PATH] [--cursor CURSOR]
-<program> peer status --session ID
-<program> peer queue --session ID --message TEXT [--resume] [--wait] [--timeout SECONDS]
+<program> peer status ID
+<program> peer queue ID --message TEXT [--resume] [--wait] [--timeout SECONDS]
 <program> peer wait --receipt RECEIPT [--timeout SECONDS]
-<program> peer read --session ID [--cursor CURSOR]
+<program> peer read ID [--cursor CURSOR]
 ```
 
 Each command writes one JSON object to stdout. Diagnostics go to stderr. Every response contains `version: 1` and `operation`. Errors contain `error: {code, message}` and exit nonzero. Completion, failure, timeout and blocking are structured results rather than transport errors.
@@ -27,3 +27,5 @@ Each command writes one JSON object to stdout. Diagnostics go to stderr. Every r
 `read` returns `sessionID`, `messages`, and `nextCursor`. Message records contain `id`, `role` and `text`. Additional native timeline records may appear. Follow `nextCursor` to read further output; do not transfer cursors between sessions or implementations. Wait returns reply content directly; read is optional for context and longer history.
 
 Receipts are opaque versioned local-service locators, not credentials or authorization tokens. Do not log authentication data in them. Keep the service/data context that admitted the message when waiting after a restart.
+
+In the TUI, `/session-id` prints the current Thread ID locally without sending a prompt or saving a message. Printing an ID does not persist an empty thread or make it discoverable in peer lists.
