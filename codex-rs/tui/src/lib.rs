@@ -2199,6 +2199,7 @@ async fn run_ratatui_app(
 
     let Cli {
         prompt,
+        plan,
         shared,
         daemon_cli_executable,
         ..
@@ -2372,6 +2373,7 @@ async fn run_ratatui_app(
         loader_overrides.clone(),
         cloud_config_bundle,
         prompt,
+        plan,
         images,
         session_selection,
         feedback,

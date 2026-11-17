@@ -547,6 +547,8 @@ pub(crate) struct ChatWidget {
     current_collaboration_mode: CollaborationMode,
     /// The currently active collaboration mask, if any.
     active_collaboration_mask: Option<CollaborationModeMask>,
+    /// Explicit launch mode, consumed after the initial session restores its settings.
+    startup_collaboration_mask: Option<CollaborationModeMask>,
     has_chatgpt_account: bool,
     pub(crate) requires_openai_auth: bool,
     has_codex_backend_auth: bool,

@@ -42,6 +42,7 @@ pub(super) async fn run_startup_for_test(
         LoaderOverrides::default(),
         CloudConfigBundleLoader::default(),
         /*initial_prompt*/ None,
+        /*initial_plan_mode*/ false,
         Vec::new(),
         selection,
         codex_feedback::CodexFeedback::new(),

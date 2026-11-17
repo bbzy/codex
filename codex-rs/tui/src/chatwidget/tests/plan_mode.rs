@@ -65,6 +65,166 @@ fn assert_literal_plan_prompt(chat: &ChatWidget, op: Result<Op, TryRecvError>, p
 }
 
 #[tokio::test]
+async fn startup_plan_mode_overrides_session_before_initial_prompt() {
+    for (restored_mode, forked) in [
+        (None, false),
+        (Some(ModeKind::Default), false),
+        (Some(ModeKind::Plan), false),
+        (Some(ModeKind::Default), true),
+    ] {
+        let (mut chat, mut events, mut ops) = make_chatwidget_manual(None).await;
+        chat.config.plan_mode_reasoning_effort = Some(ReasoningEffortConfig::High);
+        chat.initial_user_message = Some(UserMessage::from("design the change"));
+        let expected_instructions = collaboration_modes::plan_mask(&chat.model_catalog)
+            .expect("Plan mode available")
+            .developer_instructions
+            .flatten();
+        chat.prepare_startup_plan_mode()
+            .expect("Plan mode available");
+        let mut session = plan_test_session(ThreadId::new());
+        session.model = chat.current_model().to_string();
+        session.forked_from_id = forked.then(ThreadId::new);
+        session.collaboration_mode = restored_mode.map(|mode| {
+            Box::new(CollaborationMode {
+                mode,
+                settings: Settings {
+                    model: session.model.clone(),
+                    reasoning_effort: Some(ReasoningEffortConfig::Low),
+                    developer_instructions: Some("old session instructions".into()),
+                },
+            })
+        });
+        chat.handle_thread_session(session);
+
+        assert_eq!(chat.active_collaboration_mode_kind(), ModeKind::Plan);
+        assert_eq!(
+            chat.effective_reasoning_effort(),
+            Some(ReasoningEffortConfig::High)
+        );
+        assert_eq!(
+            chat.effective_collaboration_mode()
+                .settings
+                .developer_instructions,
+            expected_instructions
+        );
+        assert!(chat.startup_collaboration_mask.is_none());
+        assert!(render_bottom_popup(&chat, 100).contains("Plan"));
+        let mode_update =
+            std::iter::from_fn(|| events.try_recv().ok()).find_map(|event| match event {
+                AppEvent::SubmitThreadOp {
+                    op:
+                        crate::app_command::AppCommand::OverrideTurnContext {
+                            collaboration_mode, ..
+                        },
+                    ..
+                } => collaboration_mode,
+                _ => None,
+            });
+        assert_eq!(mode_update, Some(chat.effective_collaboration_mode()));
+        match next_submit_op(&mut ops) {
+            Op::UserTurn {
+                collaboration_mode,
+                items,
+                ..
+            } => {
+                assert_eq!(
+                    collaboration_mode,
+                    Some(chat.effective_collaboration_mode())
+                );
+                assert_eq!(
+                    items,
+                    vec![UserInput::Text {
+                        text: "design the change".into(),
+                        text_elements: Vec::new(),
+                    }]
+                );
+            }
+            other => panic!("expected initial user turn, got {other:?}"),
+        }
+    }
+}
+
+#[tokio::test]
+async fn startup_plan_mode_applies_to_queued_input() {
+    let (mut chat, _events, mut ops) = make_chatwidget_manual(None).await;
+    chat.prepare_startup_plan_mode()
+        .expect("Plan mode available");
+    chat.queue_user_message(UserMessage::from("queued startup prompt"));
+    let mut session = plan_test_session(ThreadId::new());
+    session.model = chat.current_model().to_string();
+    chat.handle_thread_session(session);
+    chat.finish_mcp_startup(Vec::new(), Vec::new());
+
+    let Op::UserTurn {
+        collaboration_mode, ..
+    } = next_submit_op(&mut ops)
+    else {
+        unreachable!("next_submit_op only returns user turns");
+    };
+    assert_eq!(
+        collaboration_mode.map(|mode| mode.mode),
+        Some(ModeKind::Plan)
+    );
+}
+
+#[tokio::test]
+async fn startup_plan_mode_without_prompt_is_consumed_once() {
+    let (mut chat, _events, mut ops) = make_chatwidget_manual(None).await;
+    chat.prepare_startup_plan_mode()
+        .expect("Plan mode available");
+    let mut session = plan_test_session(ThreadId::new());
+    session.model = chat.current_model().to_string();
+    chat.handle_thread_session(session.clone());
+    assert_eq!(chat.active_collaboration_mode_kind(), ModeKind::Plan);
+    assert_no_submit_op(&mut ops);
+
+    chat.set_collaboration_mask_from_user_action(
+        collaboration_modes::default_mode_mask(&chat.model_catalog).expect("Default mode"),
+    );
+    chat.handle_thread_session(session.clone());
+    assert_eq!(chat.active_collaboration_mode_kind(), ModeKind::Default);
+
+    session.thread_id = ThreadId::new();
+    chat.handle_thread_session(session);
+    assert_eq!(chat.active_collaboration_mode_kind(), ModeKind::Default);
+}
+
+#[tokio::test]
+async fn startup_without_plan_flag_preserves_restored_mode() {
+    for mode in [ModeKind::Default, ModeKind::Plan] {
+        let (mut chat, _events, _ops) = make_chatwidget_manual(None).await;
+        let mut session = plan_test_session(ThreadId::new());
+        session.collaboration_mode = Some(Box::new(CollaborationMode {
+            mode,
+            settings: Settings {
+                model: chat.current_model().to_string(),
+                reasoning_effort: Some(ReasoningEffortConfig::Low),
+                developer_instructions: None,
+            },
+        }));
+        chat.handle_thread_session(session);
+        assert_eq!(chat.active_collaboration_mode_kind(), mode);
+    }
+}
+
+#[tokio::test]
+async fn startup_plan_mode_unavailable_returns_error_without_submission() {
+    let (mut chat, _events, mut ops) = make_chatwidget_manual(None).await;
+    Arc::make_mut(&mut chat.model_catalog)
+        .collaboration_modes
+        .clear();
+    chat.initial_user_message = Some(UserMessage::from("design the change"));
+    let error = chat
+        .prepare_startup_plan_mode()
+        .expect_err("Plan mode unavailable");
+
+    assert!(error.to_string().contains("--plan"));
+    assert!(chat.startup_collaboration_mask.is_none());
+    assert!(chat.initial_user_message.is_some());
+    assert_no_submit_op(&mut ops);
+}
+
+#[tokio::test]
 async fn plan_draft_footer_snapshot() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
     chat.set_token_info(Some(make_token_info(

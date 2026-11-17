@@ -2829,6 +2829,7 @@ fn merge_interactive_cli_flags(interactive: &mut TuiCli, subcommand_cli: TuiCli)
         strict_config,
         approval_policy,
         web_search,
+        plan,
         no_alt_screen,
         no_daemon,
         prompt,
@@ -2852,6 +2853,7 @@ fn merge_interactive_cli_flags(interactive: &mut TuiCli, subcommand_cli: TuiCli)
     }
     interactive.no_alt_screen |= no_alt_screen;
     interactive.no_daemon |= no_daemon;
+    interactive.plan |= plan;
     if strict_config {
         interactive.strict_config = true;
     }
@@ -4068,6 +4070,59 @@ enabled = true
         assert!(interactive.resume_picker);
         assert!(!interactive.resume_last);
         assert_eq!(interactive.resume_session_id, None);
+    }
+
+    #[test]
+    fn plan_flag_parses_with_initial_prompt() {
+        let cli = MultitoolCli::try_parse_from(["codex", "--plan", "design the change"])
+            .expect("parse plan flag");
+        assert!(cli.interactive.plan);
+        assert_eq!(cli.interactive.prompt.as_deref(), Some("design the change"));
+        assert!(
+            MultitoolCli::try_parse_from(["codex", "--plan"])
+                .unwrap()
+                .interactive
+                .plan
+        );
+        assert!(
+            !MultitoolCli::try_parse_from(["codex"])
+                .unwrap()
+                .interactive
+                .plan
+        );
+    }
+
+    #[test]
+    fn exec_does_not_accept_plan_flag() {
+        assert!(MultitoolCli::try_parse_from(["codex", "exec", "--plan", "design"]).is_err());
+    }
+
+    #[test]
+    fn resume_and_fork_preserve_plan_flag() {
+        for (command, finalize) in [
+            ("resume", finalize_resume_from_args as fn(&[&str]) -> TuiCli),
+            ("fork", finalize_fork_from_args as fn(&[&str]) -> TuiCli),
+        ] {
+            for args in [
+                vec!["codex", "--plan", command, "--last"],
+                vec!["codex", command, "--last", "--plan"],
+                vec!["codex", "--plan", command, "--plan", "--last"],
+                vec![
+                    "codex",
+                    command,
+                    "session-id",
+                    "--plan",
+                    "design the change",
+                ],
+            ] {
+                let cli = finalize(&args);
+                assert!(cli.plan);
+                if args.contains(&"design the change") {
+                    assert_eq!(cli.prompt.as_deref(), Some("design the change"));
+                }
+            }
+            assert!(!finalize(&["codex", command]).plan);
+        }
     }
 
     #[test]

@@ -256,6 +256,7 @@ impl App {
         loader_overrides: LoaderOverrides,
         cloud_config_bundle: CloudConfigBundleLoader,
         initial_prompt: Option<String>,
+        initial_plan_mode: bool,
         initial_images: Vec<PathBuf>,
         session_selection: SessionSelection,
         feedback: codex_feedback::CodexFeedback,
@@ -927,6 +928,13 @@ impl App {
         if startup_session_cancelled {
             start_in_agents_overview = true;
         }
+        if initial_plan_mode
+            && !start_in_agents_overview
+            && let Err(err) = chat_widget.prepare_startup_plan_mode()
+        {
+            return shutdown_on_startup_error(app_server, &mut other_backends, err).await;
+        }
+
         chat_widget.note_rendered_width(tui.terminal.last_known_screen_size.width);
         if pending_startup_thread_start && !start_in_agents_overview {
             chat_widget

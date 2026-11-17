@@ -129,6 +129,7 @@ impl ChatWidget {
             skills_initial_state: None,
             current_collaboration_mode,
             active_collaboration_mask,
+            startup_collaboration_mask: None,
             has_chatgpt_account,
             requires_openai_auth,
             has_codex_backend_auth,

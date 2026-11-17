@@ -744,6 +744,16 @@ impl ChatWidget {
         self.submit_collaboration_mode_settings_update();
     }
 
+    pub(crate) fn prepare_startup_plan_mode(&mut self) -> color_eyre::Result<()> {
+        let mask =
+            collaboration_modes::plan_mask(self.model_catalog.as_ref()).ok_or_else(|| {
+                color_eyre::eyre::eyre!("Cannot use --plan: the server did not provide Plan mode.")
+            })?;
+        self.startup_collaboration_mask = Some(mask);
+
+        Ok(())
+    }
+
     /// Update the active collaboration mask.
     ///
     /// When collaboration modes are enabled and a preset is selected,

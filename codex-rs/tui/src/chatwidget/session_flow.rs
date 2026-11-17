@@ -218,6 +218,11 @@ impl ChatWidget {
                 self.update_collaboration_mode_indicator();
             }
         }
+        // Apply the explicit launch choice after restored settings and before any input submits.
+        if let Some(mask) = self.startup_collaboration_mask.take() {
+            self.set_collaboration_mask_from_user_action(mask);
+        }
+
         let effort = self.effective_reasoning_effort();
         self.bottom_pane
             .set_active_reasoning_effort_baseline(effort.as_ref());
