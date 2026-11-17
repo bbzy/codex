@@ -663,6 +663,26 @@ client_request_definitions! {
         serialization: thread_id(params.thread_id),
         response: v2::ThreadGoalClearResponse,
     },
+    #[experimental("peer/context")]
+    PeerContext => "peer/context" {
+        params: v2::PeerContextParams,
+        serialization: None,
+        response: v2::PeerResponse,
+    },
+    #[experimental("peer/queue")]
+    PeerQueue => "peer/queue" {
+        params: v2::PeerQueueParams,
+        serialization: None,
+        manual_payload_conversion: manual,
+        response: v2::PeerResponse,
+    },
+    #[experimental("peer/reply")]
+    PeerReply => "peer/reply" {
+        params: v2::PeerReplyParams,
+        serialization: None,
+        manual_payload_conversion: manual,
+        response: v2::PeerResponse,
+    },
     #[experimental("thread/queue/add")]
     ThreadQueueAdd => "thread/queue/add" {
         params: v2::ThreadQueueAddParams,

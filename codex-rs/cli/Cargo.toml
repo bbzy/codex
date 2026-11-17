@@ -132,6 +132,7 @@ windows-sys = { workspace = true, features = [
 app_test_support = { workspace = true }
 assert_cmd = { workspace = true }
 assert_matches = { workspace = true }
+codex-app-server-transport = { workspace = true }
 codex-uds = { workspace = true }
 codex-utils-cargo-bin = { workspace = true }
 codex-utils-pty = { workspace = true }

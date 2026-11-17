@@ -76,11 +76,55 @@ impl SqliteQueueStore {
             .collect()
     }
 
+    /// Reads the durable admission ledger without restoring or resubmitting a thread.
+    pub async fn contains_admission(
+        &self,
+        thread_id: ThreadId,
+        client_id: &str,
+    ) -> anyhow::Result<bool> {
+        let found: Option<String> = sqlx::query_scalar(
+            "SELECT client_id FROM queue_admissions WHERE thread_id = ? AND client_id = ?",
+        )
+        .bind(thread_id.to_string())
+        .bind(client_id)
+        .fetch_optional(self.pool.as_ref())
+        .await?;
+        Ok(found.is_some())
+    }
+
     pub async fn enqueue(
         &self,
         thread_id: ThreadId,
         payload_json: &str,
     ) -> anyhow::Result<QueuedUserSubmissionRecord> {
+        let client_id = serde_json::from_str::<serde_json::Value>(payload_json)
+            .ok()
+            .and_then(|value| {
+                value
+                    .get("UserInput")?
+                    .get("client_id")?
+                    .as_str()
+                    .map(str::to_owned)
+            });
+        let mut transaction = self.pool.begin_immediate().await?;
+        if let Some(client_id) = &client_id {
+            let admitted = sqlx::query(
+                "SELECT item_id AS id, thread_id, payload_json FROM queue_admissions WHERE client_id = ?",
+            )
+            .bind(client_id)
+            .fetch_optional(transaction.as_mut())
+            .await?;
+            if let Some(row) = admitted {
+                let record = QueuedUserSubmissionRecord::try_from_row(&row)?;
+                anyhow::ensure!(
+                    record.thread_id == thread_id,
+                    "client message ID belongs to another thread"
+                );
+                transaction.commit().await?;
+                return Ok(record);
+            }
+        }
+
         let now_ms = datetime_to_epoch_millis(Utc::now());
         let row = sqlx::query(
             "INSERT INTO queued_items (
@@ -101,9 +145,21 @@ impl SqliteQueueStore {
         .bind(now_ms)
         .bind(thread_id.to_string())
         .bind(i64::try_from(MAX_QUEUE_ITEMS)?)
-        .fetch_one_write(self.pool.as_ref())
+        .fetch_one(transaction.as_mut())
         .await?;
-        QueuedUserSubmissionRecord::try_from_row(&row)
+        let record = QueuedUserSubmissionRecord::try_from_row(&row)?;
+        if let Some(client_id) = client_id {
+            sqlx::query("INSERT INTO queue_admissions (client_id, thread_id, item_id, payload_json) VALUES (?, ?, ?, ?)")
+                .bind(client_id)
+                .bind(thread_id.to_string())
+                .bind(&record.id)
+                .bind(payload_json)
+                .execute(transaction.as_mut())
+                .await?;
+        }
+
+        transaction.commit().await?;
+        Ok(record)
     }
 
     pub async fn list_page(

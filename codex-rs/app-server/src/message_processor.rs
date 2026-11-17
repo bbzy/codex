@@ -177,6 +177,7 @@ pub(crate) struct MessageProcessor {
     search_processor: SearchRequestProcessor,
     thread_goal_processor: ThreadGoalRequestProcessor,
     thread_queue_processor: ThreadQueueRequestProcessor,
+    peer_service: crate::peer::PeerService,
     thread_processor: ThreadRequestProcessor,
     turn_processor: TurnRequestProcessor,
     windows_sandbox_processor: WindowsSandboxRequestProcessor,
@@ -546,6 +547,10 @@ impl MessageProcessor {
             Arc::clone(&goal_service),
             config_manager.clone(),
         );
+        let peer_service = crate::peer::PeerService::new(
+            state_db.clone(),
+            config_manager.codex_home().to_path_buf(),
+        );
         let thread_queue_processor = ThreadQueueRequestProcessor::new(
             Arc::clone(&thread_manager),
             Arc::clone(&thread_store),
@@ -672,6 +677,7 @@ impl MessageProcessor {
             search_processor,
             thread_goal_processor,
             thread_queue_processor,
+            peer_service,
             thread_processor,
             turn_processor,
             windows_sandbox_processor,
@@ -1459,6 +1465,13 @@ impl MessageProcessor {
                 self.thread_goal_processor
                     .thread_goal_clear(request_id.clone(), params)
                     .await
+            }
+            ClientRequest::PeerContext { .. } => Ok(Some(self.peer_service.context().await.into())),
+            ClientRequest::PeerQueue { params, .. } => {
+                Ok(Some(self.peer_service.queue(params).await.into()))
+            }
+            ClientRequest::PeerReply { params, .. } => {
+                Ok(Some(self.peer_service.reply(params).await.into()))
             }
             ClientRequest::ThreadQueueAdd { params, .. } => self
                 .thread_queue_processor

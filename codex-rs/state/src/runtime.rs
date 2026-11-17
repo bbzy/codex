@@ -48,8 +48,14 @@ mod logs;
 mod logs_maintenance;
 mod memories;
 mod memory_versions;
+mod peer;
+#[cfg(test)]
+mod peer_tests;
 mod projects;
 mod queued_items;
+pub use peer::PeerReply;
+pub use peer::PeerRoute;
+pub use peer::PeerTask;
 pub(crate) mod reclamation;
 pub(crate) mod recovery;
 mod remote_control;

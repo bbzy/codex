@@ -1072,7 +1072,14 @@ async fn dispatch_cli(
         mut interactive,
         subcommand,
     } = config_override_args::try_parse_from(std::env::args_os())
-        .unwrap_or_else(|error| error.exit());
+        .unwrap_or_else(|error| {
+            if std::env::args().nth(1).as_deref() == Some("peer") && error.use_stderr() {
+                let output = serde_json::json!({"version":2,"operation":std::env::args().nth(2).unwrap_or_else(|| "peer".into()),"error":{"code":"invalid_arguments","message":error.to_string()}});
+                println!("{output}");
+                std::process::exit(2);
+            }
+            error.exit()
+        });
     // Retain the launch target through TUI exit, even if a launcher changes selection.
     let daemon_cli_executable = arg0_paths
         .codex_self_exe

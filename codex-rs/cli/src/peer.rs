@@ -6,7 +6,6 @@ use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use clap::Parser;
 use clap::Subcommand;
-use codex_app_server_client::AppServerEvent;
 use codex_app_server_client::RemoteAppServerClient;
 use codex_app_server_client::RemoteAppServerConnectArgs;
 use codex_app_server_client::RemoteAppServerEndpoint;
@@ -21,7 +20,6 @@ use codex_app_server_protocol::ThreadItemEntry;
 use codex_app_server_protocol::ThreadItemPayload;
 use codex_app_server_protocol::ThreadItemsListResponse;
 use codex_app_server_protocol::ThreadListResponse;
-use codex_app_server_protocol::ThreadQueueAddResponse;
 use codex_app_server_protocol::ThreadQueueListResponse;
 use codex_app_server_protocol::ThreadReadResponse;
 use codex_app_server_protocol::ThreadStatus;
@@ -37,7 +35,6 @@ use serde_json::Value;
 use serde_json::json;
 use std::path::PathBuf;
 use std::time::Duration;
-use std::time::Instant;
 use uuid::Uuid;
 
 #[derive(Debug, Parser)]
@@ -73,32 +70,23 @@ enum Operation {
         #[arg(long)]
         resume: bool,
         #[arg(long)]
-        wait: bool,
-        #[arg(long, default_value_t = 60)]
-        timeout: u32,
+        from: String,
     },
-    Wait {
+    Reply {
         #[arg(long)]
         receipt: String,
-        #[arg(long, default_value_t = 60)]
-        timeout: u32,
+        #[arg(long)]
+        message: String,
+        #[arg(long)]
+        r#final: bool,
     },
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct Receipt {
-    version: u32,
-    service: String,
-    #[serde(rename = "sessionID")]
-    session_id: String,
-    #[serde(rename = "messageID")]
-    message_id: String,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ReadCursor {
+    operation: String,
+    data_context: String,
     #[serde(rename = "sessionID")]
     session_id: String,
     #[serde(rename = "turnID")]
@@ -107,6 +95,7 @@ struct ReadCursor {
 }
 
 fn read_cursor(
+    context: &str,
     session: &str,
     turn: Option<&str>,
     native: Option<String>,
@@ -114,6 +103,8 @@ fn read_cursor(
     native
         .map(|native| {
             Ok(URL_SAFE_NO_PAD.encode(serde_json::to_vec(&ReadCursor {
+                operation: "read".into(),
+                data_context: context.into(),
                 session_id: session.to_string(),
                 turn_id: turn.map(str::to_string),
                 native,
@@ -122,18 +113,21 @@ fn read_cursor(
         .transpose()
 }
 
-impl Receipt {
-    fn encode(&self) -> Result<String> {
-        Ok(URL_SAFE_NO_PAD.encode(serde_json::to_vec(self)?))
-    }
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ListCursor {
+    operation: String,
+    data_context: String,
+    directory: Option<String>,
+    native: String,
+}
 
-    fn decode(value: &str, service: &str) -> Result<Self> {
-        let receipt: Self = serde_json::from_slice(&URL_SAFE_NO_PAD.decode(value)?)?;
-        if receipt.version != 1 || receipt.service != service {
-            bail!("Receipt belongs to a different local service or protocol version");
-        }
-        Ok(receipt)
-    }
+async fn data_context(client: &RemoteAppServerClient) -> Result<String> {
+    let value: Value = rpc(client, "peer/context", json!({})).await?;
+    value["dataContext"]
+        .as_str()
+        .map(str::to_string)
+        .context("service_mismatch: Peer data context is unavailable")
 }
 
 impl Operation {
@@ -143,7 +137,7 @@ impl Operation {
             Self::Status { .. } => "status",
             Self::Read { .. } => "read",
             Self::Queue { .. } => "queue",
-            Self::Wait { .. } => "wait",
+            Self::Reply { .. } => "reply",
         }
     }
 }
@@ -152,12 +146,12 @@ pub(crate) async fn run(command: PeerCommand) -> Value {
     let operation = command.command.name();
     match execute(command.command).await {
         Ok(mut output) => {
-            output["version"] = json!(1);
+            output["version"] = json!(2);
             output["operation"] = json!(operation);
             output
         }
-        Err(error) => json!({"version": 1, "operation": operation, "error": {
-            "code": "peer_error", "message": format!("{error:#}")
+        Err(error) => json!({"version": 2, "operation": operation, "error": {
+            "code": codex_app_server::peer::error_code(&error), "message": format!("{error:#}")
         }}),
     }
 }
@@ -177,17 +171,82 @@ async fn rpc<T: DeserializeOwned>(
         }),
     )
     .await
-    .context("Local service request timed out")??;
-    let response = response.map_err(|error| anyhow::anyhow!("{method}: {}", error.message))?;
+    .context("service_unavailable: Local service request timed out")??;
+    let response = response.map_err(|error| {
+        anyhow::anyhow!(
+            "{}: {method}: {}",
+            codex_app_server::peer::native_error_code(&error.message),
+            error.message
+        )
+    })?;
     Ok(serde_json::from_value(response)?)
 }
 
+fn validate(operation: &Operation) -> Result<()> {
+    match operation {
+        Operation::Read {
+            cursor: Some(cursor),
+            ..
+        } => {
+            let bytes = URL_SAFE_NO_PAD
+                .decode(cursor)
+                .context("invalid_cursor: Malformed read cursor")?;
+            serde_json::from_slice::<ReadCursor>(&bytes)
+                .context("invalid_cursor: Malformed read cursor")?;
+        }
+        Operation::List {
+            cursor: Some(cursor),
+            ..
+        } => {
+            let bytes = URL_SAFE_NO_PAD
+                .decode(cursor)
+                .context("invalid_cursor: Malformed list cursor")?;
+            serde_json::from_slice::<ListCursor>(&bytes)
+                .context("invalid_cursor: Malformed list cursor")?;
+        }
+        _ => {}
+    }
+    match operation {
+        Operation::Status { session } | Operation::Read { session, .. } => {
+            if session.trim().is_empty() {
+                bail!("invalid_arguments: Session ID must not be empty");
+            }
+        }
+        Operation::Queue {
+            session,
+            message,
+            from,
+            ..
+        } => {
+            if session.trim().is_empty() || message.trim().is_empty() {
+                bail!("invalid_arguments: A Session ID and nonempty message are required");
+            }
+            if !from.split_once(':').is_some_and(|(product, session)| {
+                matches!(product, "codex" | "opencode") && !session.trim().is_empty()
+            }) {
+                bail!("invalid_arguments: --from must be PRODUCT:SESSION_ID");
+            }
+        }
+        Operation::Reply {
+            receipt, message, ..
+        } => {
+            if receipt.trim().is_empty() || message.trim().is_empty() {
+                bail!("invalid_arguments: A receipt and nonempty message are required");
+            }
+        }
+        Operation::List { .. } => {}
+    }
+    Ok(())
+}
+
 async fn execute(operation: Operation) -> Result<Value> {
+    validate(&operation)?;
     let home = find_codex_home()?;
     let socket = app_server_control_socket_path(&home)?;
     let service = socket.to_string_lossy().to_string();
-    let endpoint =
-        verified_local_daemon_socket(socket.as_path())?.context("Local service is not running")?;
+    let endpoint = verified_local_daemon_socket(socket.as_path())
+        .context("service_unavailable: Cannot verify local service")?
+        .context("service_unavailable: Local service is not running")?;
     let args = RemoteAppServerConnectArgs {
         endpoint: RemoteAppServerEndpoint::UnixSocket {
             socket_path: endpoint,
@@ -205,7 +264,7 @@ async fn execute(operation: Operation) -> Result<Value> {
     #[cfg(not(windows))]
     let mut client = RemoteAppServerClient::connect(args)
         .await
-        .context("Local service is unavailable")?;
+        .context("service_unavailable: Local service is unavailable")?;
     let output = dispatch(&mut client, &service, operation).await;
     // Disconnecting a passive client must not cancel the target's execution or decide its approvals.
     let _ = client.shutdown().await;
@@ -228,6 +287,17 @@ async fn dispatch(
                 .map(AbsolutePathBuf::relative_to_current_dir)
                 .transpose()
                 .context("Failed to resolve list directory")?;
+            let context = data_context(client).await?;
+            let directory_scope = directory
+                .as_ref()
+                .map(|path| path.to_string_lossy().to_string());
+            let cursor = cursor.map(|value| -> Result<String> {
+                let cursor: ListCursor = serde_json::from_slice(&URL_SAFE_NO_PAD.decode(value)?)?;
+                if cursor.operation != "list" || cursor.data_context != context || cursor.directory != directory_scope {
+                    bail!("Cursor scope changed");
+                }
+                Ok(cursor.native)
+            }).transpose().context("invalid_cursor: Cursor does not belong to this operation, service or directory")?;
             let page: ThreadListResponse = rpc(
                 client,
                 "thread/list",
@@ -250,23 +320,41 @@ async fn dispatch(
                 sessions.push(json!({"sessionID": thread.id, "title": thread.name,
                     "directory": thread.cwd, "updatedAt": thread.updated_at * 1000, "status": snapshot}));
             }
-            Ok(json!({"sessions": sessions, "nextCursor": page.next_cursor}))
+            let next = page
+                .next_cursor
+                .map(|native| -> Result<String> {
+                    Ok(URL_SAFE_NO_PAD.encode(serde_json::to_vec(&ListCursor {
+                        operation: "list".into(),
+                        data_context: context,
+                        directory: directory_scope,
+                        native,
+                    })?))
+                })
+                .transpose()?;
+            Ok(json!({"sessions": sessions, "nextCursor": next}))
         }
         Operation::Status { session } => {
             Ok(json!({"sessionID": session, "status": status(client, &session).await?}))
         }
         Operation::Read { session, cursor } => {
+            let context = data_context(client).await?;
             read_thread(client, &session).await?;
             let cursor = cursor
                 .map(|value| -> Result<ReadCursor> {
                     let cursor: ReadCursor =
                         serde_json::from_slice(&URL_SAFE_NO_PAD.decode(value)?)?;
-                    if cursor.session_id != session {
+                    if cursor.session_id != session
+                        || cursor.operation != "read"
+                        || cursor.data_context != context
+                    {
                         bail!("Cursor belongs to a different session");
                     }
                     Ok(cursor)
                 })
-                .transpose()?;
+                .transpose()
+                .context(
+                    "invalid_cursor: Cursor does not belong to this operation, service or session",
+                )?;
             let turn = cursor.as_ref().and_then(|value| value.turn_id.as_deref());
             let page = items(
                 client,
@@ -277,70 +365,70 @@ async fn dispatch(
             )
             .await?;
             Ok(
-                json!({"sessionID":session,"messages":messages(&page.data),"nextCursor":read_cursor(&session,turn,page.next_cursor)?}),
+                json!({"sessionID":session,"messages":messages(&page.data),"nextCursor":read_cursor(&context,&session,turn,page.next_cursor)?}),
             )
         }
-        Operation::Wait { receipt, timeout } => {
-            let decoded = Receipt::decode(&receipt, service)?;
-            let mut output = wait(client, &decoded, timeout).await?;
-            output["sessionID"] = json!(decoded.session_id);
-            output["receipt"] = json!(receipt);
-            Ok(output)
+        Operation::Reply {
+            receipt,
+            message,
+            r#final,
+        } => {
+            if message.trim().is_empty() {
+                bail!("invalid_arguments: Reply message must not be empty");
+            }
+            rpc(
+                client,
+                "peer/reply",
+                json!({"receipt":receipt,"message":message,"final":r#final}),
+            )
+            .await
         }
         Operation::Queue {
             session,
             message,
             resume,
-            wait: should_wait,
-            timeout,
+            from,
         } => {
             if message.trim().is_empty() {
-                bail!("Message must not be empty");
+                bail!("invalid_arguments: Task message must not be empty");
             }
-            let before = status(client, &session).await?;
-            if before["state"] == "archived" {
-                bail!("Session is archived");
+            let (product, source_id) = from
+                .split_once(':')
+                .context("invalid_arguments: --from must be PRODUCT:SESSION_ID")?;
+            if !matches!(product, "codex" | "opencode") || source_id.trim().is_empty() {
+                bail!("invalid_arguments: --from must be PRODUCT:SESSION_ID");
             }
-            let receipt = Receipt {
-                version: 1,
-                service: service.to_string(),
-                session_id: session.clone(),
-                message_id: Uuid::now_v7().to_string(),
-            };
-            let _: ThreadQueueAddResponse = rpc(client, "thread/queue/add", json!({
-                "threadId": session, "input": [{"type":"text", "text":message, "text_elements":[]}],
-                "clientUserMessageId": receipt.message_id,
-            })).await?;
-            let token = receipt.encode()?;
-            let resume_error = if resume && before["state"] == "not_loaded" {
-                rpc::<Value>(
-                    client,
-                    "thread/resume",
-                    json!({"threadId":session, "excludeTurns":true}),
-                )
-                .await
-                .err()
-                .map(|error| format!("{error:#}"))
+            let source_locator = if product == "codex" {
+                service.to_string()
             } else {
-                None
+                let state = if let Some(state) = std::env::var_os("XDG_STATE_HOME") {
+                    PathBuf::from(state)
+                } else {
+                    PathBuf::from(
+                        std::env::var_os("HOME")
+                            .context("service_unavailable: Native home is unavailable")?,
+                    )
+                    .join(".local/state")
+                };
+                state
+                    .join("opencode/service.json")
+                    .to_string_lossy()
+                    .to_string()
             };
-            let output = if should_wait && resume_error.is_none() {
-                wait(client, &receipt, timeout).await
-            } else {
-                status(client, &session)
-                    .await
-                    .map(|snapshot| json!({"result":"queued", "status":snapshot}))
-            };
-            // Once admission succeeded, always preserve its receipt, including observation failures.
-            let mut output = output.unwrap_or_else(
-                |error| json!({"result":"queued", "observationError":format!("{error:#}")}),
-            );
-            output["sessionID"] = json!(session);
-            output["receipt"] = json!(token);
-            if let Some(error) = resume_error {
-                output["resumeError"] = json!(error);
+            let source =
+                codex_app_server::peer::resolve(product, source_id, &source_locator).await?;
+            let context: Value = rpc(client, "peer/context", json!({})).await?;
+            let target = json!({"product":"codex","sessionID":session,"dataContext":context["dataContext"],"locator":service});
+            let mut result: Value = rpc(client, "peer/queue", json!({"sessionID":session,"message":message,"resume":resume,"source":source,"target":target})).await.context("admission_failed: Queue acknowledgement was lost; the task may already exist. Reconcile the target before resending")?;
+            if result.get("error").is_none() {
+                match status(client, &session).await {
+                    Ok(snapshot) => result["status"] = snapshot,
+                    Err(_) => {
+                        result["observationError"] = json!({"code":"native_error","message":"Task admitted but status observation failed"})
+                    }
+                }
             }
-            Ok(output)
+            Ok(result)
         }
     }
 }
@@ -392,10 +480,10 @@ fn blockers(status: &ThreadStatus) -> Vec<Value> {
     .filter(|flag| active_flags.contains(flag))
     .map(|flag| match flag {
         ThreadActiveFlag::WaitingOnApproval => {
-            json!({"reason":"permission","summary":"Waiting for approval"})
+            json!({"reason":"permission","summary":"Waiting for approval","id":null})
         }
         ThreadActiveFlag::WaitingOnUserInput => {
-            json!({"reason":"input","summary":"Waiting for user input"})
+            json!({"reason":"input","summary":"Waiting for user input","id":null})
         }
     })
     .collect()
@@ -424,13 +512,19 @@ async fn snapshot(
             break;
         }
     }
-    let turns: ThreadTurnsListResponse = rpc(
-        client,
-        "thread/turns/list",
-        json!({"threadId":thread.id,"limit":100,"sortDirection":"desc","itemsView":"summary"}),
-    )
-    .await?;
-    let last = turns.data.iter().find_map(|turn| outcome(&turn.status));
+    let mut cursor = None;
+    let last = loop {
+        let turns: ThreadTurnsListResponse = rpc(
+            client,
+            "thread/turns/list",
+            json!({"threadId":thread.id,"cursor":cursor,"limit":100,"sortDirection":"desc","itemsView":"summary"}),
+        ).await?;
+        let last = turns.data.iter().find_map(|turn| outcome(&turn.status));
+        cursor = turns.next_cursor;
+        if last.is_some() || cursor.is_none() {
+            break last;
+        }
+    };
     let reasons = blockers(&thread.status);
     let state = if archived {
         "archived"
@@ -476,106 +570,10 @@ fn messages(items: &[ThreadItemEntry]) -> Vec<Value> {
     }).collect()
 }
 
-async fn reply(
-    client: &RemoteAppServerClient,
-    receipt: &Receipt,
-) -> Result<(Option<&'static str>, Value)> {
-    let mut cursor = None;
-    let turn_id = loop {
-        let page = items(client, &receipt.session_id, None, cursor, "desc").await?;
-        if let Some(entry) = page.data.iter().find(|entry| {
-            matches!(&entry.item.payload,
-            ThreadItemPayload::UserMessage { client_id: Some(id), .. } if id == &receipt.message_id)
-        }) {
-            break entry.turn_id.clone();
-        }
-        cursor = page.next_cursor;
-        if cursor.is_none() {
-            return Ok((None, json!({"messages":[],"nextCursor":null})));
-        }
-    };
-    let mut cursor = None;
-    let terminal = loop {
-        let page: ThreadTurnsListResponse = rpc(client,"thread/turns/list",json!({"threadId":receipt.session_id,"cursor":cursor,"limit":100,"sortDirection":"desc","itemsView":"summary"})).await?;
-        if let Some(turn) = page.data.iter().find(|turn| turn.id == turn_id) {
-            break outcome(&turn.status);
-        }
-        cursor = page.next_cursor;
-        if cursor.is_none() {
-            break None;
-        }
-    };
-    let mut page = items(client, &receipt.session_id, Some(&turn_id), None, "asc").await?;
-    page.data.retain(|entry| {
-        !matches!(&entry.item.payload,
-        ThreadItemPayload::UserMessage { client_id: Some(id), .. } if id == &receipt.message_id)
-    });
-    Ok((
-        terminal,
-        json!({"messages":messages(&page.data),"nextCursor":read_cursor(&receipt.session_id,Some(&turn_id),page.next_cursor)?}),
-    ))
-}
-
-async fn wait(
-    client: &mut RemoteAppServerClient,
-    receipt: &Receipt,
-    timeout: u32,
-) -> Result<Value> {
-    // Install the signal handler before polling any observation RPC. Cancelling this
-    // wait only drops the passive observation; it never interrupts the session.
-    tokio::select! {
-        biased;
-        _ = tokio::signal::ctrl_c() => Ok(json!({
-            "result": "waiting_interrupted", "status": null,
-            "messages": [], "nextCursor": null,
-        })),
-        output = observe_reply(client, receipt, timeout) => output,
-    }
-}
-
-async fn observe_reply(
-    client: &mut RemoteAppServerClient,
-    receipt: &Receipt,
-    timeout: u32,
-) -> Result<Value> {
-    let deadline = Instant::now() + Duration::from_secs(u64::from(timeout));
-    loop {
-        let snapshot = status(client, &receipt.session_id).await?;
-        let (terminal, mut output) = reply(client, receipt).await?;
-        let state = terminal
-            .map(|value| {
-                if value == "succeeded" {
-                    "completed"
-                } else {
-                    value
-                }
-            })
-            .or_else(|| match snapshot["state"].as_str() {
-                Some("blocked") => Some("blocked"),
-                Some("not_loaded") => Some("not_loaded"),
-                Some("archived") => Some("archived"),
-                _ => None,
-            });
-        if let Some(state) = state {
-            output["result"] = json!(state);
-            output["status"] = snapshot;
-            return Ok(output);
-        }
-        if Instant::now() >= deadline {
-            output["result"] = json!("timeout");
-            output["status"] = snapshot;
-            return Ok(output);
-        }
-        // A passive client observes requests but never answers or rejects them.
-        tokio::select! {
-            _ = tokio::time::sleep(Duration::from_millis(500).min(deadline.saturating_duration_since(Instant::now())) ) => {},
-            event = client.next_event() => {
-                if matches!(event, None | Some(AppServerEvent::Disconnected { .. })) { bail!("Local service disconnected"); }
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 #[path = "peer_tests.rs"]
 mod tests;
+
+#[cfg(all(test, unix))]
+#[path = "peer_admission_tests.rs"]
+mod admission_tests;

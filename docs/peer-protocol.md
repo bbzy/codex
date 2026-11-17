@@ -1,31 +1,19 @@
-# Peer CLI protocol v1
+# Peer CLI protocol v2
 
-A peer CLI accesses only its own existing local service. It never discovers other executables, starts a service, creates a target session, forks history, changes the model, or answers permissions and forms.
+The authoritative shared contract is the `agent-peer-protocol` AFL project: `afl/core/peer/{lib,types,protocol,lifecycle}.afl`, with product identity edges, native implementation associations and acceptance specifications. Maintain shared behavior there before changing either native implementation.
 
-## Commands
-
-```
-<program> peer list [--cur-dir | --dir PATH] [--cursor CURSOR]
-<program> peer status ID
-<program> peer queue ID --message TEXT [--resume] [--wait] [--timeout SECONDS]
-<program> peer wait --receipt RECEIPT [--timeout SECONDS]
-<program> peer read ID [--cursor CURSOR]
+```text
+<product> peer list [--cur-dir | --dir PATH] [--cursor CURSOR]
+<product> peer status ID
+<product> peer read ID [--cursor CURSOR]
+<product> peer queue ID --message TEXT --from PRODUCT:SESSION_ID [--resume]
+<product> peer reply --receipt RECEIPT --message TEXT [--final]
 ```
 
-Each command writes one JSON object to stdout. Diagnostics go to stderr. Every response contains `version: 1` and `operation`. Errors contain `error: {code, message}` and exit nonzero. Completion, failure, timeout and blocking are structured results rather than transport errors.
+The user first obtains the target's full Session ID using `/session-id` and explicitly selects that existing session. The sending agent provides its own existing identity through `--from`. No operation starts a service or creates/forks a session. Query commands are passive.
 
-`list` returns `sessions` and `nextCursor`; entries have `sessionID`, `title`, `directory`, `updatedAt` (epoch milliseconds), and `status`. The default page has up to 50 recent non-archived top-level sessions, including explicitly named empty sessions. Cursors are opaque and local to their operation and service.
+Queue acknowledges durable native admission, independently of execution. The target can work across multiple turns and explicitly send progress, then a final reply. Ordinary output and idle do not complete a task. Reply first saves the message, then queues it back to the original sender without steering, interrupting or implicitly restoring an unloaded session. Failed return delivery remains pending; repeating an identical pending reply reuses its fixed message ID. Final saves atomically close the task while allowing pending delivery retries.
 
-`list --cur-dir` filters by the calling CLI's current working directory; `list --dir PATH` filters by an explicit directory, resolving relative paths against that same working directory. The two options are mutually exclusive. Matching is exact, without including subdirectories or changing to the repository root. Omit both to list all directories. Filtering happens before pagination; repeat the same directory option when following `nextCursor`.
+Receipts contain 128 random bits encoded as 22 Base64URL characters. Durable routes bind the exact product, data context and session. Records do not automatically expire, and there is no background retry or cleanup. Version 1 receipts require manual reconciliation; `wait`, `queue --wait` and `--timeout` are removed.
 
-`status` returns a snapshot without sending, loading, resuming, or interrupting work. Its fields are `sessionID`, `state`, `blocked`, `blockers`, `pendingCount`, `lastOutcome`, and `observedAt` (RFC3339). States are `idle`, `running`, `blocked`, `not_loaded`, and `archived`. Block reasons include `permission` and `input`; approval takes precedence in the summary. `lastOutcome` is null until available, then `succeeded`, `failed` or `interrupted`. An idle session may still have queued work; a slow model or tool is not a blocker. Missing sessions and unavailable services are errors, never idle snapshots.
-
-`queue` returns `sessionID`, `receipt`, `result: queued` and a snapshot. Loaded sessions drain their queue at an idle boundary. `--resume` also restores an unloaded existing session in the same running service. A failed restore preserves the admission receipt and supplies `resumeError`. Retrying a queue after an uncertain transport failure can duplicate delivery: check history before resending.
-
-`wait` returns the receipt, session ID, snapshot, messages and `result`. Results are `completed`, `failed`, `interrupted`, `blocked`, `not_loaded`, `archived`, `timeout` and `waiting_interrupted`. `queue --wait` uses the same wait implementation. The default timeout is 60 seconds; zero performs an immediate observation. A timeout or cancelled wait never cancels target work. If cancellation arrives before observation finishes, `status` may be null; the receipt remains available. A blocked wait does not answer or reject the pending question or approval. Continue waiting with the same receipt after human interaction. Receipt completion follows the admitted input, not the session's old idle state or its most recent unrelated response. Concurrent human input remains in the ordered history and may influence the reply.
-
-`read` returns `sessionID`, `messages`, and `nextCursor`. Message records contain `id`, `role` and `text`. Additional native timeline records may appear. Follow `nextCursor` to read further output; do not transfer cursors between sessions or implementations. Wait returns reply content directly; read is optional for context and longer history.
-
-Receipts are opaque versioned local-service locators, not credentials or authorization tokens. Do not log authentication data in them. Keep the service/data context that admitted the message when waiting after a restart.
-
-In the TUI, `/session-id` prints the current Thread ID locally without sending a prompt or saving a message. Printing an ID does not persist an empty thread or make it discoverable in peer lists.
+Each command writes one version 2 JSON object and newline to stdout. Errors exit nonzero. `docs/fixtures/peer-v1.json` is historical, not the current contract. Native tests cover persistence, admission deduplication, explicit replies, concurrency and isolated service integration; follow the shared AFL test specifications when extending coverage.

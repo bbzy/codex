@@ -8,7 +8,10 @@ use sqlx::migrate::Migrator;
 use std::borrow::Cow;
 
 async fn runtime_with_thread() -> (Arc<StateRuntime>, ThreadId) {
-    let home = unique_temp_dir();
+    runtime_with_thread_in(unique_temp_dir()).await
+}
+
+async fn runtime_with_thread_in(home: std::path::PathBuf) -> (Arc<StateRuntime>, ThreadId) {
     let runtime = StateRuntime::init(
         crate::SqliteConfig::new_for_testing(home.as_path().abs()),
         "test-provider".to_string(),
@@ -19,6 +22,71 @@ async fn runtime_with_thread() -> (Arc<StateRuntime>, ThreadId) {
     let metadata = test_thread_metadata(home.as_path(), thread_id, home.clone());
     runtime.upsert_thread(&metadata).await.unwrap();
     (runtime, thread_id)
+}
+
+#[tokio::test]
+async fn client_message_admission_survives_consumption_and_reopen() {
+    let home = tempfile::tempdir().unwrap();
+    let (runtime, thread_id) = runtime_with_thread_in(home.path().to_path_buf()).await;
+    let payload = r#"{"UserInput":{"content":[],"client_id":"peer-reply-1"}}"#;
+    let first = runtime
+        .thread_queue()
+        .enqueue(thread_id, payload)
+        .await
+        .unwrap();
+    runtime
+        .thread_queue()
+        .delete(thread_id, &first.id)
+        .await
+        .unwrap();
+    let reopened = StateRuntime::init(runtime.sqlite().clone(), "test-provider".to_string())
+        .await
+        .unwrap();
+    let replay = reopened
+        .thread_queue()
+        .enqueue(thread_id, payload)
+        .await
+        .unwrap();
+    assert_eq!(replay, first);
+    assert!(
+        reopened
+            .thread_queue()
+            .list_page(thread_id, 0, 10)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        reopened
+            .thread_queue()
+            .enqueue(ThreadId::new(), payload)
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
+async fn concurrent_client_message_admission_is_idempotent() {
+    let home = tempfile::tempdir().unwrap();
+    let (runtime, thread_id) = runtime_with_thread_in(home.path().to_path_buf()).await;
+    let other = StateRuntime::init(runtime.sqlite().clone(), "test-provider".to_string())
+        .await
+        .unwrap();
+    let payload = r#"{"UserInput":{"content":[],"client_id":"peer-reply-2"}}"#;
+    let (first, second) = tokio::join!(
+        runtime.thread_queue().enqueue(thread_id, payload),
+        other.thread_queue().enqueue(thread_id, payload)
+    );
+    assert_eq!(first.unwrap(), second.unwrap());
+    assert_eq!(
+        runtime
+            .thread_queue()
+            .list_page(thread_id, 0, 10)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
 }
 
 #[tokio::test]

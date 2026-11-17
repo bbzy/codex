@@ -171,3 +171,7 @@ pub const LOG_WRITE_ENTRIES_METRIC: &str = "codex.sqlite.logs.write.entries";
 pub const LOG_WRITE_MAX_ENTRY_BYTES_METRIC: &str = "codex.sqlite.logs.write.max_entry_bytes";
 /// SQLite log entries discarded before they can be queued. Tags: [reason]
 pub const LOG_QUEUE_DROPPED_METRIC: &str = "codex.sqlite.logs.queue.dropped";
+
+pub use runtime::PeerReply;
+pub use runtime::PeerRoute;
+pub use runtime::PeerTask;
